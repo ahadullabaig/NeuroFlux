@@ -4,14 +4,14 @@ install:
 	uv sync --all-packages
 
 test:
-	pytest tests/ packages/ --cov=packages/
+	NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ --cov=packages/
 
 lint:
-	ruff check .
-	mypy .
+	uv run ruff check .
+	uv run mypy .
 
 format:
-	ruff format .
+	uv run ruff format .
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
