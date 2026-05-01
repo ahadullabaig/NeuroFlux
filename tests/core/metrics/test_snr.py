@@ -13,13 +13,13 @@ def test_calculate_snr_valid() -> None:
     # A simple sine wave
     t = np.linspace(0, 10, 100)
     signal_true = np.sin(t)
-    
+
     # Add small noise
     noise = np.random.normal(0, 0.1, len(t))
     signal_pred = signal_true + noise
-    
+
     snr = calculate_snr(signal_true, signal_pred)
-    
+
     # Variance of sin(t) is ~0.5. Variance of noise is ~0.01.
     # SNR should be around 10 * log10(0.5 / 0.01) = 10 * log10(50) ~= 17 dB
     assert 10.0 < snr < 25.0

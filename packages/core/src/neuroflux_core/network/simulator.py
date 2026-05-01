@@ -40,9 +40,7 @@ class Simulator:
         self.encoder = encoder
 
         if decoder is None:
-            decoder = PopulationDecoder(
-                v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0
-            )
+            decoder = PopulationDecoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0)
         self.decoder = decoder
 
         self.time = 0.0
@@ -131,9 +129,7 @@ class Simulator:
             out[t] = layer_spikes[-1]
         return out
 
-    def decode(
-        self, spike_train: np.ndarray, method: str | None = None
-    ) -> np.ndarray:
+    def decode(self, spike_train: np.ndarray, method: str | None = None) -> np.ndarray:
         """
         Apply the configured decoder to a (T, N) spike train.
 

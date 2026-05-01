@@ -47,9 +47,7 @@ def test_invalid_bounds() -> None:
     with pytest.raises(ValueError, match="max_firing_rate"):
         SpikeRateDecoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=0.0)
     with pytest.raises(ValueError, match="window_ms"):
-        SpikeRateDecoder(
-            v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0, window_ms=0.0
-        )
+        SpikeRateDecoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0, window_ms=0.0)
 
 
 def test_reset_state() -> None:

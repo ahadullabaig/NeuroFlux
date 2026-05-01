@@ -23,9 +23,7 @@ def silent_neuron_fraction(spike_train: np.ndarray) -> float:
     return float(np.mean(arr.sum(axis=0) == 0))
 
 
-def fano_factor(
-    spike_train: np.ndarray, dt: float, window_ms: float
-) -> np.ndarray:
+def fano_factor(spike_train: np.ndarray, dt: float, window_ms: float) -> np.ndarray:
     """
     Fano factor (variance / mean of spike counts in `window_ms` windows) per
     neuron. Returns 0.0 for neurons with zero mean count.

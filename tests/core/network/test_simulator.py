@@ -132,6 +132,7 @@ def test_simulator_decode_validates_2d() -> None:
 
 def test_simulator_seed_reproducibility() -> None:
     """Two Simulators with same seed must produce identical output."""
+
     def runit() -> tuple[np.ndarray, np.ndarray]:
         net = Network.feedforward(layers=[16, 8], seed=123, init_scheme="uniform")
         sim = Simulator(net, dt=1.0, seed=123)

@@ -13,9 +13,7 @@ def winner_take_all(spike_counts: np.ndarray) -> int:
     return int(np.argmax(arr))
 
 
-def classification_accuracy(
-    predicted: np.ndarray, true: np.ndarray
-) -> float:
+def classification_accuracy(predicted: np.ndarray, true: np.ndarray) -> float:
     """Fraction of equal entries in `predicted` and `true`."""
     p = np.asarray(predicted)
     t = np.asarray(true)

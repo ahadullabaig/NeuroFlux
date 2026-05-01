@@ -14,9 +14,7 @@ class BaseSynapse(ABC):
         pass
 
     @abstractmethod
-    def step(
-        self, pre_spikes: np.ndarray, post_spikes: np.ndarray, dt: float
-    ) -> None:
+    def step(self, pre_spikes: np.ndarray, post_spikes: np.ndarray, dt: float) -> None:
         """
         Update synaptic state given pre- and post-synaptic spikes.
 

@@ -24,9 +24,7 @@ def test_canonical_small_network_snapshot() -> None:
 
     w0 = sim.network.synapses[0].weights
 
-    expected_w0_sha = (
-        "a5e3b453743a8689a0dd97bd1f27806f25150fc49af3220f5c168d1750ceb2a2"
-    )
+    expected_w0_sha = "a5e3b453743a8689a0dd97bd1f27806f25150fc49af3220f5c168d1750ceb2a2"
     expected_out_sha = (
         "50f8638646b0c69f4727ffae2b2e02eba67059cbfa205c0129ec41f4b9b425b4"
     )
@@ -46,6 +44,7 @@ def test_canonical_small_network_snapshot() -> None:
 
 def test_canonical_snapshot_reproduces_across_runs() -> None:
     """Same seed → identical snapshot, twice in a row."""
+
     def runit() -> tuple[str, int]:
         net = Network.feedforward(layers=[10, 5], seed=42, init_scheme="uniform")
         sim = Simulator(net, dt=1.0, seed=42)

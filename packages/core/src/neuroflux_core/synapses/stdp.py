@@ -119,9 +119,7 @@ class STDPSynapse(BaseSynapse):
         self.trace_pre.fill(0.0)
         self.trace_post.fill(0.0)
 
-    def step(
-        self, pre_spikes: np.ndarray, post_spikes: np.ndarray, dt: float
-    ) -> None:
+    def step(self, pre_spikes: np.ndarray, post_spikes: np.ndarray, dt: float) -> None:
         """Advance the synaptic states by one timestep."""
         self.weights, self.trace_pre, self.trace_post = _stdp_step(
             self.weights,

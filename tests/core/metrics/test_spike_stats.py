@@ -64,6 +64,4 @@ def test_fano_factor_validates() -> None:
     with pytest.raises(ValueError, match="2D"):
         fano_factor(np.zeros(10, dtype=np.bool_), dt=1.0, window_ms=10.0)
     with pytest.raises(ValueError, match="positive"):
-        fano_factor(
-            np.zeros((10, 2), dtype=np.bool_), dt=1.0, window_ms=0.0
-        )
+        fano_factor(np.zeros((10, 2), dtype=np.bool_), dt=1.0, window_ms=0.0)

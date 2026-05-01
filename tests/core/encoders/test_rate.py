@@ -28,10 +28,10 @@ def test_rate_encoder_statistics() -> None:
     # 5.0 is exactly half of the range, so normalized = 0.5
     # Probability per timestep = 0.5 * 50 * (1/1000) = 0.025
     signal = np.array([5.0] * 100_000)
-    
+
     spikes = encoder.encode(signal, dt=dt)
     actual_prob = np.mean(spikes)
-    
+
     expected_prob = 0.025
     # Should be close to analytical probability due to large N
     assert np.isclose(actual_prob, expected_prob, atol=0.005)
@@ -39,19 +39,20 @@ def test_rate_encoder_statistics() -> None:
 
 @given(
     signal_val=st.floats(min_value=-5.0, max_value=5.0),
-    dt=st.floats(min_value=0.1, max_value=10.0)
+    dt=st.floats(min_value=0.1, max_value=10.0),
 )
 def test_rate_encoder_property(signal_val: float, dt: float) -> None:
     encoder = PoissonRateEncoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0)
     signal = np.array([signal_val])
     spikes = encoder.encode(signal, dt=dt)
-    
+
     assert isinstance(spikes, np.ndarray)
     assert spikes.dtype == np.bool_
     assert spikes.shape == (1,)
-    
+
     if signal_val <= 0.0:
         assert not spikes[0]
+
 
 def test_rate_encoder_reset_state() -> None:
     encoder = PoissonRateEncoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0)
