@@ -83,6 +83,7 @@ class STDPSynapse(BaseSynapse):
         n_post: int,
         config: STDPConfig,
         initial_weights: np.ndarray | None = None,
+        rng: np.random.Generator | None = None,
     ):
         """
         Initialize the STDP synapses.
@@ -92,6 +93,7 @@ class STDPSynapse(BaseSynapse):
             n_post: Number of post-synaptic neurons.
             config: Configuration parameters for STDP.
             initial_weights: Optional starting weights. If None, randomly initialized.
+            rng: Optional Generator for reproducible weight initialization.
         """
         self.n_pre = n_pre
         self.n_post = n_post
@@ -102,8 +104,8 @@ class STDPSynapse(BaseSynapse):
                 raise ValueError("initial_weights shape must be (n_pre, n_post)")
             self.weights = initial_weights.astype(np.float32).copy()
         else:
-            # Random initialization between w_min and w_max
-            self.weights = np.random.uniform(
+            gen = rng if rng is not None else np.random.default_rng()
+            self.weights = gen.uniform(
                 config.w_min, config.w_max, size=(n_pre, n_post)
             ).astype(np.float32)
 

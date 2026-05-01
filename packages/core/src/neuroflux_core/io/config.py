@@ -18,8 +18,15 @@ class LIFConfig(BaseModel):
     v_reset: float = Field(
         default=-80.0, description="Reset potential after spike (mV)"
     )
+    v_floor: float = Field(
+        default=-90.0, description="Hyperpolarization floor (mV); voltage clamped here"
+    )
     tau_m: float = Field(default=20.0, description="Membrane time constant (ms)")
     t_ref: float = Field(default=2.0, description="Absolute refractory period (ms)")
+    g_syn: float = Field(
+        default=30.0,
+        description="Synaptic gain — scales summed input current to mV-equivalent",
+    )
 
 
 class STDPConfig(BaseModel):

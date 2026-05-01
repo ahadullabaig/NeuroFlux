@@ -1,45 +1,44 @@
+import os
 import time
 
 import numpy as np
-from neuroflux_core.decoders.population import PopulationDecoder
-from neuroflux_core.encoders.rate import PoissonRateEncoder
-from neuroflux_core.io.config import NetworkConfig
-from neuroflux_core.network.simulator import Simulator
+import pytest
+from neuroflux_core import Network, Simulator
 
 
+@pytest.mark.skipif(
+    os.environ.get("NUMBA_DISABLE_JIT") == "1",
+    reason="PLAN.md performance target requires JIT-compiled kernels.",
+)
 def test_640_synapse_performance_benchmark() -> None:
     """
-    Performance benchmark running a dense topology of 640 synapses.
-    The benchmark verifies that 100 timesteps evaluate extremely fast.
+    PLAN.md acceptance criterion: 640-synapse network, 10,000 timesteps,
+    under 2 seconds on M-series or i7-class CPU (with Numba JIT).
     """
-    # 32 input * 20 hidden = 640 synapses. (Plus some output layer if needed, 
-    # but the instructions specifically mention 640 synapses, so we use [32, 20])
-    config = NetworkConfig(layers=[32, 20])
-    encoder = PoissonRateEncoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0)
-    decoder = PopulationDecoder(v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0)
-    
-    sim = Simulator(config, encoder, decoder)
-    
-    dt = 1.0
-    signal = np.random.uniform(0.0, 1.0, size=(32,))
-    
-    # Warmup for Numba JIT compilation
-    sim.run_step(signal, dt)
+    net = Network.feedforward(layers=[32, 20], seed=42, init_scheme="uniform")
+    sim = Simulator(net, dt=1.0, seed=42)
+
+    rng = np.random.default_rng(42)
+    signal = rng.uniform(0.0, 1.0, size=(32,))
+
+    # Warm up Numba JIT
+    sim.run_step(signal)
     sim.reset_state()
-    
-    # Run Benchmark
-    steps = 1000
-    start_time = time.perf_counter()
-    
+
+    steps = 10_000
+    start = time.perf_counter()
     for _ in range(steps):
-        # We can dynamically vary the signal or keep it static
-        sim.run_step(signal, dt, training=True)
-        
-    end_time = time.perf_counter()
-    duration = end_time - start_time
-    
-    # For a small network compiled with Numba, 1000 steps should take < 0.1 
-    # seconds usually.
-    # We assert a highly generous upper bound to prevent CI flakes while 
-    # ensuring no massive regressions.
-    assert duration < 5.0, f"Performance heavily degraded: {duration:.2f} seconds."
+        sim.run_step(signal, training=True)
+    duration = time.perf_counter() - start
+
+    assert duration < 2.0, (
+        f"Performance regression: {duration:.2f}s for 10k steps × 640 synapses "
+        f"(target < 2s per PLAN.md)."
+    )
+
+
+def test_smoke_step_under_jit_disabled() -> None:
+    """Sanity check that the step loop runs at all when JIT is off."""
+    net = Network.feedforward(layers=[10, 5], seed=0)
+    sim = Simulator(net, dt=1.0, seed=0)
+    sim.run_step(np.full(10, 0.5))
