@@ -1,7 +1,7 @@
 .PHONY: install test lint format clean
 
 install:
-	uv sync
+	uv sync --all-packages
 
 test:
 	pytest tests/ packages/ --cov=packages/
