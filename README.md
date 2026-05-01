@@ -4,11 +4,11 @@ NeuroFlux is a highly optimized, software-based Neuromorphic Framework designed 
 
 By modeling biological spiking dynamics, NeuroFlux natively processes complex analog signals (like ECG and EEG waves), dynamically learning to suppress flicker noise anomalies via continuous-time synaptic plasticity.
 
-## 🚀 Current Status: Phase 1 Complete
+## Current Status: Phase 1 Complete
 
 The **Core SNN Engine** (`neuroflux_core`) has been fully implemented, rigorously tested (97% coverage), and mathematically verified via snapshot hashes. We are currently transitioning into **Phase 2 (Python Demonstration)** to integrate physiological datasets and establish benchmarks against traditional ML baselines.
 
-### 🔥 Core Engine Features
+### Core Engine Features
 The engine is written in pure Python but aggressively optimized to reach C-level execution speeds via LLVM Just-In-Time compilation.
 
 - **Leaky Integrate-and-Fire (LIF) Neurons:** Vectorized arrays modeling precise membrane voltages, continuous leak decays, and hard-bounded refractory clamp periods.
@@ -17,7 +17,7 @@ The engine is written in pure Python but aggressively optimized to reach C-level
 - **Numba LLVM Acceleration:** Core physics integration loops are wrapped in `@njit(cache=True)`, enabling dense multi-layered network simulations to execute tens of thousands of timesteps in a fraction of a second.
 - **Reproducible Orchestration:** Top-to-bottom deterministic RNG plumbing via the `Simulator.run()` and `Network.feedforward()` classes, equipped with zero-cost state checkpointing (`.npz`) and analytical metrics (SNR, Spike Statistics, Fano factors).
 
-## 🛠️ Quickstart
+## Quickstart
 
 This repository uses `uv` for lightning-fast workspace and dependency management.
 
@@ -32,7 +32,7 @@ make test
 make lint
 ```
 
-## 📁 Repository Structure
+## Repository Structure
 
 - `packages/core/`: The core Python SNN engine.
 - `packages/datasets/`: Physiological dataset loaders and automated pipelines.

@@ -2,11 +2,19 @@
 
 from abc import ABC, abstractmethod
 
+from typing import Any
+
 import numpy as np
 
 
 class BaseNetwork(ABC):
     """Abstract base class for spiking neural networks."""
+
+    @property
+    @abstractmethod
+    def synapses(self) -> list[Any]:
+        """Return the list of synapse instances in the network."""
+        pass
 
     @abstractmethod
     def reset_state(self) -> None:
