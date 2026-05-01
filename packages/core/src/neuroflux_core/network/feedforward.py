@@ -12,6 +12,10 @@ from neuroflux_core.synapses.stdp import STDPSynapse
 class FeedForwardNetwork(BaseNetwork):
     """Standard fully connected feedforward SNN architecture."""
 
+    @property
+    def synapses(self) -> list[STDPSynapse]:
+        return self._synapses
+
     def __init__(
         self,
         config: NetworkConfig,
@@ -34,7 +38,7 @@ class FeedForwardNetwork(BaseNetwork):
         self.init_scheme = init_scheme
 
         self.neurons: list[LIFNeuron] = []
-        self.synapses: list[STDPSynapse] = []
+        self._synapses: list[STDPSynapse] = []
 
         for i in range(len(self.layers) - 1):
             n_pre = self.layers[i]
@@ -49,7 +53,7 @@ class FeedForwardNetwork(BaseNetwork):
                 w_min=config.plasticity.w_min,
                 w_max=config.plasticity.w_max,
             )
-            self.synapses.append(
+            self._synapses.append(
                 STDPSynapse(
                     n_pre=n_pre,
                     n_post=n_post,
@@ -83,7 +87,7 @@ class FeedForwardNetwork(BaseNetwork):
     def reset_state(self) -> None:
         for neuron_group in self.neurons:
             neuron_group.reset_state()
-        for synapse_matrix in self.synapses:
+        for synapse_matrix in self._synapses:
             synapse_matrix.reset_state()
 
     def step(
@@ -95,8 +99,8 @@ class FeedForwardNetwork(BaseNetwork):
         all_spikes: list[np.ndarray] = [input_spikes]
         current_spikes = input_spikes
 
-        for i in range(len(self.synapses)):
-            synapse = self.synapses[i]
+        for i in range(len(self._synapses)):
+            synapse = self._synapses[i]
             neuron = self.neurons[i]
 
             input_current = np.dot(current_spikes.astype(np.float32), synapse.weights)
