@@ -19,9 +19,12 @@ The engine is written in pure Python but aggressively optimized to reach C-level
 
 ## Quickstart
 
-This repository uses `uv` for lightning-fast workspace and dependency management.
+This repository uses [uv](https://github.com/astral-sh/uv) for lightning-fast workspace and dependency management. You must have `uv` installed to use the Make commands.
 
 ```bash
+# Install uv (if you haven't already)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # Install dependencies and setup the workspace
 make install
 
