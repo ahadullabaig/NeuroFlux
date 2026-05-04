@@ -33,4 +33,4 @@ jobs:
         run: uv run mypy .
 
       - name: Test
-        run: uv run pytest tests/ packages/ --cov=packages/
+        run: NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ --cov=packages/
