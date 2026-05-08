@@ -1,0 +1,25 @@
+# Quick Validation Config
+#
+# Minimal sweep for CI smoke testing and development iteration.
+# Produces 1 × 1 × 1 × 1 × 1 = 1 combo × 2 seeds = 2 runs.
+# Expected runtime: ~20 seconds.
+#
+# Usage:
+#   neuroflux-experiment run configs/phase2/quick_validation.yaml \
+#       --output-db experiments/quick_results.db
+
+signal_types: [ecg]
+
+flicker_frequencies: [50.0]
+
+input_snrs: [10.0]
+
+training_epochs: [50]
+
+stdp_taus: [20.0]
+
+flicker_amplitude: 0.5
+
+seeds_per_config: 2
+
+duration_s: 1.0

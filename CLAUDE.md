@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NeuroFlux** — a Python-based Spiking Neural Network (SNN) framework for adaptive flicker suppression in temporal biomedical signals (ECG, EEG, PPG). The mechanism is biologically inspired: STDP-driven unsupervised learning amplifies recurring signal structure and passively suppresses noise, with no labeled training data required.
 
-**Phase 0 (repo/tooling) and Phase 1 (core SNN engine) are complete.** Next is Phase 2 (synthetic data validation). See `PLAN.md` for the full 16-week roadmap and `DETAILS.md` for the full technical specification.
+**Phases 0, 1, and 2 are complete.** Next is Phase 3 (real biomedical dataset integration). See `PLAN.md` for the full 16-week roadmap and `DETAILS.md` for the full technical specification.
 
 ---
 
@@ -17,6 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make install      # uv sync --all-packages
 make test         # NUMBA_DISABLE_JIT=1 pytest tests/ packages/ --cov=packages/
+make test-fast    # same but -m "not slow" — used in CI, excludes sweep tests
+make test-slow    # only @pytest.mark.slow tests (runs actual experiment sweeps)
 make lint         # ruff check + mypy (strict)
 make format       # ruff format
 make clean        # remove __pycache__, .pytest_cache, .ruff_cache, .mypy_cache
@@ -50,10 +52,12 @@ uv run mypy packages/core/
 neuroflux/
 ├── packages/
 │   ├── core/           # neuroflux-core — Phase 1 (complete)
-│   ├── datasets/       # neuroflux-datasets — Phase 3 (stub only)
+│   ├── datasets/       # neuroflux-datasets — Phase 2 (complete)
 │   └── baselines/      # neuroflux-baselines — Phase 4 (stub only)
+├── configs/phase2/     # full_sweep.yaml, quick_validation.yaml
+├── results/            # full_sweep.db, significance_results.csv, figures/
 ├── tests/              # integration + property + snapshot tests
-├── experiments/        # Jupyter notebooks (empty, Phase 2+)
+├── experiments/        # phase2_analysis.ipynb
 ├── docs/               # Architecture docs (empty, Phase 7)
 └── pyproject.toml      # uv workspace root; dev deps (pytest, ruff, mypy, mlflow)
 ```
@@ -136,6 +140,50 @@ analog signal → Encoder → input_spikes (bool[N_in])
 - `mean_firing_rate(spike_train, dt)` → Hz per neuron
 - `silent_neuron_fraction(spike_train)` → float
 - `fano_factor(spike_train, dt, window_ms)` → per neuron
+
+---
+
+## Phase 2 package (`neuroflux_datasets`)
+
+### Synthetic signal generators (`synthetic.py`)
+
+```python
+from neuroflux_datasets.synthetic import (
+    generate_ecg, generate_eeg, generate_sine,
+    add_flicker, add_gaussian_noise,
+    SignalGenerator,
+)
+```
+
+`SignalGenerator(fs, seed)` is the unified pipeline: call `.generate(signal_type, duration_s, flicker_freq=None, flicker_amplitude=0.0, snr_db=None, **kwargs)` → returns `(clean, noisy)` as `np.ndarray` pairs.
+
+### Experiment runner (`cli.py`)
+
+```bash
+uv run neuroflux-experiment run <config.yaml> --output-db <path>
+uv run neuroflux-experiment analyze-significance <db> --output-dir <dir> --p-threshold 0.01
+```
+
+`Phase2Config` — Pydantic v2 model with fields: `signal_types`, `flicker_frequencies`, `input_snrs`, `training_epochs`, `stdp_taus`, `flicker_amplitude` (default 0.5), `seeds_per_config`, `duration_s`. `run_experiment_command` uses `ProcessPoolExecutor` (scales to `os.cpu_count()`).
+
+`ExperimentResult` — dataclass with `delta_snr` (float) and `convergence_speed` (int).
+
+### Analysis (`analysis.py`)
+
+| Function | Purpose |
+|---|---|
+| `fetch_aggregated_data(db)` | AVG delta_snr over seeds, grouped by config |
+| `fetch_raw_runs(db)` | All individual rows without aggregation |
+| `compute_statistical_significance(raw_runs, p_threshold)` | One-sample t-test per config, Cohen's d |
+| `summarize_significance(sig_results)` | High-level totals, best/worst config |
+| `identify_failure_modes(sig_results)` | Configs with negative_improvement / not_significant / high_variance |
+| `plot_snr_heatmap` / `plot_convergence_curves` / `plot_parameter_sensitivity` | Save PNG figures |
+
+### Phase 2 known limitations
+
+**EEG and sine signals are degraded, not improved.** The full sweep showed ECG at 100% significant configs (mean ΔSNR +6.5 dB) but EEG at 12% and sine at 25%, both with negative mean ΔSNR. STDP learns repeating morphological structure (QRS complex) but cannot distinguish periodic flicker from a periodic signal or latent EEG rhythms. This is a documented finding, not a bug — do not attempt to "fix" it by tuning parameters without a clear mechanistic rationale.
+
+**CI regression test** (`tests/datasets/test_regression.py`) guards the canonical ECG config: `signal_type=ecg`, `flicker_freq=50 Hz`, `input_snr=10 dB`, `epochs=100`, `stdp_tau=20 ms`, `seed=0` must achieve ΔSNR ≥ 4 dB. This runs in `make test-fast` (not slow-marked). If it breaks, a change to LIF dynamics, STDP, encoders, or signal generation has regressed ECG performance.
 
 ---
 

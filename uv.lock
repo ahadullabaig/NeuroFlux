@@ -1876,11 +1876,21 @@ name = "neuroflux-datasets"
 version = "0.1.0"
 source = { editable = "packages/datasets" }
 dependencies = [
+    { name = "matplotlib" },
     { name = "neuroflux-core" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "scipy" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "neuroflux-core", editable = "packages/core" }]
+requires-dist = [
+    { name = "matplotlib", specifier = ">=3.8.0" },
+    { name = "neuroflux-core", editable = "packages/core" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.0" },
+    { name = "scipy", specifier = ">=1.12.0" },
+]
 
 [[package]]
 name = "neuroflux-workspace"

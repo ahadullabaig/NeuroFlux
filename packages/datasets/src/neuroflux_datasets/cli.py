@@ -1,0 +1,477 @@
+"""Command Line Interface for NeuroFlux Experiments."""
+
+import argparse
+import concurrent.futures
+import itertools
+import sqlite3
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal
+
+import numpy as np
+import yaml
+from neuroflux_core.decoders.population import PopulationDecoder
+from neuroflux_core.encoders.rate import PoissonRateEncoder
+from neuroflux_core.io.config import LIFConfig, STDPConfig
+from neuroflux_core.metrics.snr import calculate_snr
+from neuroflux_core.network.feedforward import FeedForwardNetwork, Network
+from neuroflux_core.network.simulator import Simulator
+from pydantic import BaseModel
+
+from neuroflux_datasets.synthetic import SignalGenerator
+
+
+class Phase2Config(BaseModel):
+    """Pydantic schema for Phase 2 validation sweep configurations."""
+
+    signal_types: list[Literal["ecg", "eeg", "sine"]]
+    flicker_frequencies: list[float]
+    input_snrs: list[float]
+    training_epochs: list[int]
+    stdp_taus: list[float]
+    flicker_amplitude: float = 0.5
+    seeds_per_config: int = 10
+    duration_s: float = 1.0
+
+
+@dataclass
+class RunResult:
+    signal_type: str
+    flicker_freq: float
+    input_snr: float
+    epochs: int
+    stdp_tau: float
+    seed: int
+    delta_snr: float
+    convergence_speed: int
+
+
+class ResultsDB:
+    """SQLite backend for recording experiment results."""
+
+    def __init__(self, db_path: str | Path):
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.db_path))
+        self._init_db()
+
+    def _init_db(self) -> None:
+        with self.conn:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    signal_type TEXT,
+                    flicker_freq REAL,
+                    input_snr REAL,
+                    epochs INTEGER,
+                    stdp_tau REAL,
+                    seed INTEGER,
+                    delta_snr REAL,
+                    convergence_speed INTEGER
+                )
+            """)
+
+    def insert_result(self, res: RunResult) -> None:
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO runs
+                (signal_type, flicker_freq, input_snr, epochs,
+                 stdp_tau, seed, delta_snr, convergence_speed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    res.signal_type,
+                    res.flicker_freq,
+                    res.input_snr,
+                    res.epochs,
+                    res.stdp_tau,
+                    res.seed,
+                    res.delta_snr,
+                    res.convergence_speed,
+                ),
+            )
+
+
+def _reset_transient_state(sim: Simulator) -> None:
+    """Reset all transient (non-weight) state for a clean epoch.
+
+    Resets neuron voltages, refractory timers, STDP traces,
+    encoder/decoder state, and the simulator clock. Synaptic
+    weights are preserved.
+    """
+    assert isinstance(sim.network, FeedForwardNetwork)
+    sim.time = 0.0
+    sim.encoder.reset_state()
+    sim.decoder.reset_state()
+    for n in sim.network.neurons:
+        n.v.fill(n.config.v_rest)
+        n.refractory_time.fill(0.0)
+    for s in sim.network.synapses:
+        s.trace_pre.fill(0.0)
+        s.trace_post.fill(0.0)
+
+
+def _compute_convergence_speed(
+    epoch_delta_snrs: list[float],
+    final_delta_snr: float,
+) -> int:
+    """Find the first epoch where ΔSNR reaches 90% of final value.
+
+    Args:
+        epoch_delta_snrs: Per-epoch ΔSNR measurements.
+        final_delta_snr: ΔSNR from the final evaluation pass.
+
+    Returns:
+        1-indexed epoch number at which 90% was first reached,
+        or total epochs if threshold was never crossed.
+    """
+    if final_delta_snr <= 0 or not epoch_delta_snrs:
+        return len(epoch_delta_snrs) if epoch_delta_snrs else 0
+
+    threshold = 0.9 * final_delta_snr
+    for i, dsnr in enumerate(epoch_delta_snrs):
+        if dsnr >= threshold:
+            return i + 1  # 1-indexed
+    return len(epoch_delta_snrs)
+
+
+def run_single_experiment(params: dict[str, Any]) -> RunResult:
+    """Executes a single SNN parameter configuration."""
+    signal_type = params["signal_type"]
+    flicker_freq = params["flicker_freq"]
+    input_snr = params["input_snr"]
+    epochs = params["epochs"]
+    stdp_tau = params["stdp_tau"]
+    seed = params["seed"]
+    duration_s = params["duration_s"]
+    flicker_amplitude = params.get("flicker_amplitude", 0.5)
+
+    fs = 250.0
+    dt = 1000.0 / fs  # 4.0 ms
+
+    # 1. Generate Signal
+    gen = SignalGenerator(fs=fs, seed=seed)
+    clean, noisy = gen.generate(
+        signal_type=signal_type,
+        duration_s=duration_s,
+        flicker_freq=flicker_freq,
+        flicker_amplitude=flicker_amplitude,
+        snr_db=input_snr,
+    )
+
+    # Calculate baseline SNR
+    base_snr = calculate_snr(clean, noisy)
+
+    # Normalize signal for the SNN
+    v_min = float(np.min(noisy))
+    v_max = float(np.max(noisy))
+    if v_max <= v_min:
+        v_max = v_min + 1.0
+
+    # 2. Configure SNN
+    net = Network.feedforward(
+        layers=[32, 16, 8],
+        neuron=LIFConfig(),
+        plasticity=STDPConfig(tau_plus=stdp_tau, tau_minus=stdp_tau),
+        seed=seed,
+    )
+
+    encoder = PoissonRateEncoder(
+        v_min=v_min,
+        v_max=v_max,
+        max_firing_rate_hz=100.0,
+        rng=np.random.default_rng(seed),
+    )
+    decoder = PopulationDecoder(v_min=v_min, v_max=v_max, max_firing_rate_hz=100.0)
+
+    sim = Simulator(net, dt=dt, seed=seed, encoder=encoder, decoder=decoder)
+
+    # SNN expects (T, n_input). Copy single channel to 32 inputs.
+    time_varying_noisy = np.tile(noisy, (32, 1)).T
+
+    assert isinstance(sim.network, FeedForwardNetwork)
+
+    # 3. Train SNN with per-epoch convergence tracking
+    epoch_delta_snrs: list[float] = []
+    duration_ms = duration_s * 1000.0
+
+    for _ in range(epochs):
+        # Training pass
+        sim.run(time_varying_noisy, duration_ms=duration_ms, training=True)
+        _reset_transient_state(sim)
+
+        # Eval pass — save/restore encoder RNG so training is unaffected
+        rng_state = encoder.rng.bit_generator.state
+        eval_spikes = sim.run(
+            time_varying_noisy,
+            duration_ms=duration_ms,
+            training=False,
+        )
+        eval_recon = sim.decode(eval_spikes)
+        epoch_delta_snrs.append(calculate_snr(clean, eval_recon) - base_snr)
+        encoder.rng.bit_generator.state = rng_state
+        _reset_transient_state(sim)
+
+    # 4. Final Evaluation Epoch
+    out_spikes = sim.run(
+        time_varying_noisy,
+        duration_ms=duration_ms,
+        training=False,
+    )
+    reconstructed = sim.decode(out_spikes)
+
+    final_snr = calculate_snr(clean, reconstructed)
+    delta_snr = final_snr - base_snr
+
+    convergence_speed = _compute_convergence_speed(
+        epoch_delta_snrs,
+        delta_snr,
+    )
+
+    return RunResult(
+        signal_type=signal_type,
+        flicker_freq=flicker_freq,
+        input_snr=input_snr,
+        epochs=epochs,
+        stdp_tau=stdp_tau,
+        seed=seed,
+        delta_snr=delta_snr,
+        convergence_speed=convergence_speed,
+    )
+
+
+def run_experiment_command(args: argparse.Namespace) -> None:
+    """Handles the 'run' CLI command."""
+    with open(args.config) as f:
+        raw_config = yaml.safe_load(f)
+
+    config = Phase2Config(**raw_config)
+
+    db = ResultsDB(args.output_db)
+
+    # Generate Cartesian product of all parameters
+    param_combinations = list(
+        itertools.product(
+            config.signal_types,
+            config.flicker_frequencies,
+            config.input_snrs,
+            config.training_epochs,
+            config.stdp_taus,
+            range(config.seeds_per_config),
+        )
+    )
+
+    tasks = []
+    for params in param_combinations:
+        tasks.append(
+            {
+                "signal_type": params[0],
+                "flicker_freq": params[1],
+                "input_snr": params[2],
+                "epochs": params[3],
+                "stdp_tau": params[4],
+                "seed": params[5],
+                "duration_s": config.duration_s,
+                "flicker_amplitude": config.flicker_amplitude,
+            }
+        )
+
+    print(f"Starting execution of {len(tasks)} runs...")
+
+    # Execute in parallel
+    completed = 0
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = {executor.submit(run_single_experiment, t): t for t in tasks}
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                res = future.result()
+                db.insert_result(res)
+                completed += 1
+                if completed % 10 == 0:
+                    print(f"Completed {completed} / {len(tasks)} runs...")
+            except Exception as e:
+                print(f"Error in run: {e}")
+
+    print(f"Finished {completed} runs. Results saved to {args.output_db}")
+
+
+def analyze_significance_command(args: argparse.Namespace) -> None:
+    """Handles the 'analyze-significance' CLI command."""
+    import csv
+
+    from neuroflux_datasets.analysis import (
+        compute_statistical_significance,
+        fetch_raw_runs,
+        identify_failure_modes,
+        summarize_significance,
+    )
+
+    db_path = args.db
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    p_threshold: float = args.p_threshold
+
+    print(f"Loading raw runs from {db_path}...")
+    try:
+        raw_runs = fetch_raw_runs(db_path)
+    except sqlite3.OperationalError as e:
+        print(f"Error reading database: {e}")
+        return
+
+    if not raw_runs:
+        print("No runs found in the database.")
+        return
+
+    print(f"Found {len(raw_runs)} raw runs. Computing significance...")
+    sig_results = compute_statistical_significance(raw_runs, p_threshold=p_threshold)
+    summary = summarize_significance(sig_results)
+    failures = identify_failure_modes(sig_results)
+
+    print("\n=== Significance Summary ===")
+    print(f"Total configs:        {summary['total_configs']}")
+    print(
+        f"Significant (p<{p_threshold:.2f}):  "
+        f"{summary['significant_configs']} "
+        f"({summary['pct_significant']:.1f}%)"
+    )
+    print(
+        f"Improved (ΔSNR>0):    "
+        f"{summary['improved_configs']} "
+        f"({summary['pct_improved']:.1f}%)"
+    )
+    print(f"Mean ΔSNR overall:    {summary['mean_delta_snr_overall']:.3f} dB")
+
+    if summary["best_config"]:
+        b = summary["best_config"]
+        print(
+            f"\nBest:  {b['signal_type']}, {b['flicker_freq']} Hz, "
+            f"{b['input_snr']} dB SNR, {b['epochs']} ep, "
+            f"τ={b['stdp_tau']} → ΔSNR={b['mean_delta_snr']:.3f} dB"
+        )
+    if summary["worst_config"]:
+        w = summary["worst_config"]
+        print(
+            f"Worst: {w['signal_type']}, {w['flicker_freq']} Hz, "
+            f"{w['input_snr']} dB SNR, {w['epochs']} ep, "
+            f"τ={w['stdp_tau']} → ΔSNR={w['mean_delta_snr']:.3f} dB"
+        )
+
+    print(f"\nFailure modes: {len(failures)} configs")
+
+    if sig_results:
+        sig_path = out_dir / "significance_results.csv"
+        with open(sig_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(sig_results[0].keys()))
+            writer.writeheader()
+            writer.writerows(sig_results)
+        print(f"Significance results → {sig_path}")
+
+    if failures:
+        fail_path = out_dir / "failure_modes.csv"
+        with open(fail_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(failures[0].keys()))
+            writer.writeheader()
+            writer.writerows(failures)
+        print(f"Failure modes        → {fail_path}")
+
+    print(f"\nAll reports saved to {out_dir}/")
+
+
+def analyze_experiment_command(args: argparse.Namespace) -> None:
+    """Handles the 'analyze' CLI command."""
+    from neuroflux_datasets.analysis import (
+        fetch_aggregated_data,
+        plot_convergence_curves,
+        plot_parameter_sensitivity,
+        plot_snr_heatmap,
+    )
+
+    db_path = args.db
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Fetching and aggregating data from {db_path}...")
+    try:
+        results = fetch_aggregated_data(db_path)
+    except sqlite3.OperationalError as e:
+        print(f"Error reading database: {e}")
+        return
+
+    if not results:
+        print("No results found in the database.")
+        return
+
+    signal_types = set(r["signal_type"] for r in results)
+
+    for sig in signal_types:
+        print(f"Generating plots for {sig.upper()}...")
+
+        heatmap_path = out_dir / f"snr_heatmap_{sig}.png"
+        plot_snr_heatmap(results, sig, heatmap_path)
+
+        convergence_path = out_dir / f"convergence_{sig}.png"
+        plot_convergence_curves(results, sig, convergence_path)
+
+        sensitivity_path = out_dir / f"sensitivity_{sig}.png"
+        plot_parameter_sensitivity(results, sig, sensitivity_path)
+
+    print(f"All plots saved to {out_dir}/")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="NeuroFlux Experiment Runner")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    run_parser = subparsers.add_parser(
+        "run", help="Run experiments from a YAML config."
+    )
+    run_parser.add_argument("config", type=str, help="Path to the YAML config file.")
+    run_parser.add_argument(
+        "--output-db",
+        type=str,
+        default="results.db",
+        help="Path to the SQLite output database.",
+    )
+
+    analyze_parser = subparsers.add_parser(
+        "analyze", help="Analyze results and generate plots."
+    )
+    analyze_parser.add_argument("db", type=str, help="Path to the SQLite database.")
+    analyze_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="figures",
+        help="Directory to save generated plots.",
+    )
+
+    sig_parser = subparsers.add_parser(
+        "analyze-significance",
+        help="Run statistical significance analysis on results.",
+    )
+    sig_parser.add_argument("db", type=str, help="Path to the SQLite database.")
+    sig_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="significance",
+        help="Directory to save CSV reports.",
+    )
+    sig_parser.add_argument(
+        "--p-threshold",
+        type=float,
+        default=0.05,
+        help="p-value threshold for significance (default: 0.05).",
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "run":
+        run_experiment_command(args)
+    elif args.command == "analyze":
+        analyze_experiment_command(args)
+    elif args.command == "analyze-significance":
+        analyze_significance_command(args)
+
+
+if __name__ == "__main__":
+    main()

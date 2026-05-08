@@ -1,10 +1,16 @@
-.PHONY: install test lint format clean
+.PHONY: install test test-fast test-slow lint format clean
 
 install:
 	uv sync --all-packages
 
 test:
-	NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ --cov=packages/
+	NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ --cov=packages/ --cov-fail-under=85
+
+test-fast:
+	NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ -m "not slow" --cov=packages/ --cov-fail-under=85
+
+test-slow:
+	NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ -m "slow" -v
 
 lint:
 	uv run ruff check .

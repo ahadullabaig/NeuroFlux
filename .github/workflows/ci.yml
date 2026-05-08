@@ -32,5 +32,5 @@ jobs:
       - name: Type Check
         run: uv run mypy .
 
-      - name: Test
-        run: NUMBA_DISABLE_JIT=1 uv run pytest tests/ packages/ --cov=packages/
+      - name: Test (fast — excludes slow sweep tests)
+        run: make test-fast
