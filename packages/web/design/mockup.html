@@ -10,30 +10,38 @@
 <style>
   /* ─────────────────────────── Design Tokens ─────────────────────────── */
   :root {
-    /* Surfaces */
-    --void:        #07080D;
-    --surface-0:   #0B0E16;
-    --surface-1:   #11151F;
-    --surface-2:   #161B28;
-    --surface-3:   #1D2331;
+    /* Surfaces — prussian blueprint paper */
+    --void:        #0F1B2E;
+    --surface-0:   #122036;
+    --surface-1:   #15243C;
+    --surface-2:   #1A2C46;
+    --surface-3:   #213658;
 
-    /* Hairlines */
-    --rule:        #1A2030;
-    --rule-strong: #262D3F;
-    --rule-hot:    #3A4258;
+    /* Hairlines — drawn-in-chalk on blueprint */
+    --rule:        #2B3C5A;
+    --rule-strong: #3D5378;
+    --rule-hot:    #557099;
 
-    /* Text */
-    --text-1: #E9EBF0;
-    --text-2: #8C94A8;
-    --text-3: #535B6F;
-    --text-4: #2F3447;
+    /* Text — warm parchment ink */
+    --text-1: #EDE4D3;
+    --text-2: #B5AB95;
+    --text-3: #7E7660;
+    --text-4: #4A5670;
 
-    /* Brand accents (used WITH semantic meaning) */
-    --amber:    #FFB547;   /* noisy signal · layer 1 · interference */
-    --cyan:     #00D9C0;   /* reconstructed · layer 2 · positive Δ */
-    --magenta:  #FF6B9D;   /* negative Δ · degradation warning */
-    --bone:     #F2F0E8;   /* layer 3 · pure data */
-    --clean:    #687386;   /* clean reference trace */
+    /* Brand accents (semantic — blueprint annotation colors) */
+    --rust:      #C04E2C;   /* reconstructed · layer 2 · positive Δ · BRAND */
+    --sage:      #88A57B;   /* noisy signal · layer 1 · interference */
+    --mustard:   #D4C158;   /* negative Δ · standout warning */
+    --parchment: #EDE4D3;   /* layer 3 · pure data · primary ink */
+    --clean:     #B5AB95;   /* clean reference trace (understated) */
+
+    /* Internal aliases used throughout — keep old names mapped to new colors
+       so we don't refactor every var() reference. New code (and DESIGN.md /
+       Tailwind config) should use the semantic names above. */
+    --amber:    var(--sage);
+    --cyan:     var(--rust);
+    --magenta:  var(--mustard);
+    --bone:     var(--parchment);
 
     /* Typography */
     --f-display: 'Instrument Serif', 'Times New Roman', serif;
@@ -60,9 +68,10 @@
     letter-spacing: 0.005em;
     overflow-x: hidden;
     /* Subtle film grain to make the dark feel physical, not flat */
+    /* Warm rust + sage atmosphere — like ink wash on blueprint paper */
     background-image:
-      radial-gradient(1200px 700px at 22% 18%, rgba(0,217,192,0.025), transparent 60%),
-      radial-gradient(900px 600px at 88% 92%, rgba(255,181,71,0.018), transparent 60%);
+      radial-gradient(1200px 700px at 22% 18%, rgba(192,78,44,0.05), transparent 60%),
+      radial-gradient(900px 600px at 88% 92%, rgba(136,165,123,0.035), transparent 60%);
   }
   body::before {
     content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1;
@@ -261,7 +270,7 @@
   .slider-fill {
     position: absolute; top: 11px; left: 0; height: 2px;
     background: var(--cyan);
-    box-shadow: 0 0 8px rgba(0, 217, 192, 0.4);
+    box-shadow: 0 0 8px rgba(192, 78, 44, 0.4);
   }
   .slider-handle {
     position: absolute; top: 6px;
@@ -269,10 +278,10 @@
     background: var(--cyan);
     transform: translateX(-50%) rotate(45deg);
     transition: box-shadow 160ms var(--ease-out);
-    box-shadow: 0 0 0 4px rgba(0, 217, 192, 0.08);
+    box-shadow: 0 0 0 4px rgba(192, 78, 44, 0.08);
   }
   .slider:hover .slider-handle {
-    box-shadow: 0 0 0 5px rgba(0, 217, 192, 0.14);
+    box-shadow: 0 0 0 5px rgba(192, 78, 44, 0.14);
   }
   .slider-ticks {
     position: absolute; top: 16px; left: 0; right: 0; height: 4px;
@@ -342,7 +351,7 @@
   }
   .run-btn:hover {
     border-color: var(--cyan); color: var(--cyan);
-    box-shadow: 0 0 24px rgba(0, 217, 192, 0.18) inset;
+    box-shadow: 0 0 24px rgba(192, 78, 44, 0.18) inset;
   }
   .run-btn .glyph {
     width: 0; height: 0;
@@ -386,7 +395,7 @@
     background: repeating-linear-gradient(
       to bottom,
       transparent 0px, transparent 3px,
-      rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px
+      rgba(237,228,211,0.018) 3px, rgba(237,228,211,0.018) 4px
     );
     z-index: 1;
   }
@@ -467,7 +476,7 @@
   .trace-noisy { stroke: var(--amber); stroke-width: 1.1; opacity: 0.55; }
   .trace-reconstructed {
     stroke: var(--cyan); stroke-width: 1.7;
-    filter: drop-shadow(0 0 5px rgba(0, 217, 192, 0.35));
+    filter: drop-shadow(0 0 5px rgba(192, 78, 44, 0.35));
   }
   .rpeak-marker { fill: var(--cyan); opacity: 0.95; }
   .rpeak-marker-clean {
@@ -553,9 +562,9 @@
   .bar-fill {
     position: absolute; top: 0; left: 0; height: 100%;
     background: var(--cyan); transition: width 600ms var(--ease-out);
-    box-shadow: 0 0 6px rgba(0, 217, 192, 0.4);
+    box-shadow: 0 0 6px rgba(192, 78, 44, 0.4);
   }
-  .bar-fill.warn { background: var(--magenta); box-shadow: 0 0 6px rgba(255, 107, 157, 0.35); }
+  .bar-fill.warn { background: var(--magenta); box-shadow: 0 0 6px rgba(212, 193, 88, 0.35); }
 
   /* ── History strip ── */
   .history {
@@ -627,7 +636,7 @@
     <div class="brand">
       <div class="brand-mark">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M1 8 Q3 8 4 4 T7 12 T10 4 T13 12 Q14 8 15 8" stroke="#00D9C0" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+          <path d="M1 8 Q3 8 4 4 T7 12 T10 4 T13 12 Q14 8 15 8" stroke="#C04E2C" stroke-width="1.2" fill="none" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="brand-word">Neuro<span class="flux">flux</span></div>

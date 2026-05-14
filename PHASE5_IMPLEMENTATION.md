@@ -604,7 +604,7 @@ make test-fast                 # ensure no regressions to existing tests
   @layer base { body { @apply font-ui bg-void text-ink-1; } }
   ```
   Import in `main.tsx`.
-- Verify with the brand-mark in the header: `<span className="font-ui font-semibold tracking-[0.18em] uppercase text-[13px]">Neuro<span className="font-display italic text-[17px] text-accent-cyan normal-case tracking-normal">flux</span></span>` (see DESIGN.md §7.1).
+- Verify with the brand-mark in the header: `<span className="font-ui font-semibold tracking-[0.18em] uppercase text-[13px]">Neuro<span className="font-display italic text-[17px] text-accent-rust normal-case tracking-normal">flux</span></span>` (see DESIGN.md §7.1).
 
 ---
 
@@ -679,7 +679,7 @@ cd packages/web/frontend && npm run build && npm run dev
 
 **C1.1 — Custom slider + section primitives**
 - Build a `<Slider>` component wrapping `@radix-ui/react-slider`, styled
-  per DESIGN.md §7.5: 2px track, glowing cyan fill, 12px diamond handle
+  per DESIGN.md §7.5: 2px track, glowing rust fill, 12px diamond handle
   (rotated 45deg), 5 tick marks below, slider-head row with mono value
   + unit. Do NOT use the Radix default styles — strip them entirely
   (`[&_[data-orientation]]:bg-transparent` etc.) and rebuild.
@@ -729,7 +729,7 @@ implementation; port it to React/TS.
 **C2.2 — Traces with draw-on animation**
 - Render three `<path>` elements with classes mapped to design tokens:
   `stroke-signal-noisy stroke-[1.1]`, `stroke-signal-clean stroke-[1.3]`,
-  `stroke-signal-reconstructed stroke-[1.7] [filter:drop-shadow(0_0_5px_rgba(0,217,192,0.35))]`.
+  `stroke-signal-reconstructed stroke-[1.7] [filter:drop-shadow(0_0_5px_rgba(192,78,44,0.35))]`.
 - Animate stroke-dashoffset from pathLength → 0 (900ms cubic-bezier
   `.22,1,.36,1`) staggered by 0/100/250ms (noisy / clean / reconstructed).
   Reconstructed last so it lands on top.
@@ -738,7 +738,7 @@ implementation; port it to React/TS.
 
 **C2.3 — R-peak markers + playhead + empty/loading/error states**
 - R-peak markers per §7.9: clean = outlined triangle (`fill none stroke-clean`),
-  reconstructed = filled cyan triangle. Render AFTER traces complete
+  reconstructed = filled rust triangle. Render AFTER traces complete
   (animation-delay matched to trace draw duration), fade-in scale-bounce.
 - Hover playhead: track mouse `clientX` in the plot frame; render a vertical
   dashed line + glassmorphism readout in the top-right showing t / clean /
@@ -747,7 +747,7 @@ implementation; port it to React/TS.
 - Empty state: when `response === null && status === 'idle'`, overlay
   "AWAITING SIGNAL — CONFIGURE & RUN" centered, with a pulsing 8px dot.
 - Loading: pulsing dot + "RUNNING…" overlay.
-- Error: magenta callout (NOT red) in the top of the card.
+- Error: mustard callout (NOT red) in the top of the card.
 
 **C2.4 — Legend overlay + scanline + performance check**
 - Legend: glassmorphism panel top-right (per §7.9), one line per trace +
@@ -774,9 +774,9 @@ No console errors.
   `bg-rule` (the hairline-via-gap trick).
 - Per cell: mono small-caps label, huge mono number (28px) with unit in
   `ink-3`, sub-line or progress bar below.
-- **Colour rules (DO NOT deviate):** ΔSNR cell uses `accent-cyan` if
-  positive, `accent-magenta` if negative. **Never red, never green.**
-  rpeak cell has a 3px progress bar (cyan if ≥0.85, magenta if below).
+- **Colour rules (DO NOT deviate):** ΔSNR cell uses `accent-rust` if
+  positive, `accent-mustard` if negative. **Never red, never green.**
+  rpeak cell has a 3px progress bar (rust if ≥0.85, mustard if below).
 - Numbers count up from previous value via Framer Motion `animate` on a
   state value over 600ms cubic ease-out.
 - Show "—" when no response.
@@ -817,7 +817,7 @@ This is the v1 minimum-viable demo. Everything beyond is enhancement.
   `layerSizes: number[]` (default `[32, 16, 8]`).
 - Render hairline rules between layers (`stroke-rule stroke-[1] stroke-dasharray="2 4"`).
 - Each spike: 2×4px vertical rect, color by layer:
-  L1 → `fill-accent-amber`, L2 → `fill-accent-cyan`, L3 → `fill-accent-bone`.
+  L1 → `fill-accent-sage`, L2 → `fill-accent-rust`, L3 → `fill-accent-parchment`.
 - Layer labels on RIGHT edge in mono small caps (`L1 · INPUT · 32`, etc.).
 - Spikes fade in staggered by `t` position (later spikes appear later — the
   raster looks like it's being scanned out). 300ms fade-in with delay

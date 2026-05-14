@@ -11,23 +11,35 @@ choices, and how to encode them in code."
 
 ---
 
-## 1. Aesthetic direction — "modern scientific instrument"
+## 1. Aesthetic direction — "blueprint scientific instrument"
 
-Committed direction: a dark, dense surface that reads as a **laboratory
-instrument front panel** rather than a SaaS dashboard. References pulled
-from (informally):
+Committed direction: a deep **prussian blueprint canvas** with parchment ink,
+treated as a **technical drawing** rather than a SaaS dashboard or generic
+dark UI. The blueprint metaphor is load-bearing — every choice (palette,
+hairlines, mono numerics, typography) supports the read of "this is a drawn
+instrument schematic, brought to life."
 
+References pulled from (informally):
+
+- 19th–20th century engineering blueprints — prussian blue paper, cream ink,
+  precision drafting lines, marginal annotations in rust-orange grease pencil.
 - Bloomberg Terminal's information density and mono-numeric data treatment.
-- Apple Health Heart Rate visualisation's restraint and cyan-on-dark legibility.
 - Editorial science journals (NEJM, Nature) for serif accent typography
   used **sparingly** in headers.
-- Vacuum-fluorescent displays and oscilloscope screens (the very faint
-  scanline overlay on the plot canvas).
+- The kind of marginalia annotations you'd see on an oscilloscope schematic
+  — rust ink for emphasis, sage for "this is the noise floor."
+
+**Why blueprint, not dark+cyan:** dark surfaces with cyan accents have become
+the default AI-generated dashboard aesthetic in 2024–2025 (every Vercel
+template, every shadcn theme). The blueprint reads as warmer, more
+hand-drawn, more academically credible — and crucially, *uncommon* in
+software UIs. Evaluators will not have seen it before.
 
 The whole dashboard is one continuous instrument surface — header, controls,
 canvas, metrics, history — separated by **hairline rules**, not cards with
 heavy shadows. There is one container border, then everything inside is
-demarcated by 1px rules. This is the single biggest non-SaaS move.
+demarcated by 1px rules in pale cream over the prussian. This is the single
+biggest non-SaaS move.
 
 **The rule:** no decoration that isn't load-bearing. Color carries meaning.
 Typography signals function. Motion reveals data.
@@ -68,50 +80,63 @@ Typography signals function. Motion reveals data.
 All colors are CSS variables on `:root`. Wire them into Tailwind via
 `tailwind.config.ts` `theme.extend.colors` (see §8 below).
 
-### Surfaces (dark scale)
-| Token | Hex | Use |
-|---|---|---|
-| `--void` | `#07080D` | Page background (visible only at viewport edges). |
-| `--surface-0` | `#0B0E16` | Header bar, controls panel, main canvas background. |
-| `--surface-1` | `#11151F` | Cards, sliders track inactive, dropdown trigger. |
-| `--surface-2` | `#161B28` | Mode-toggle active half, button default state. |
-| `--surface-3` | `#1D2331` | Hover states, dropdown items hover. |
+### Surfaces — prussian blueprint paper scale
 
-### Hairlines
 | Token | Hex | Use |
 |---|---|---|
-| `--rule` | `#1A2030` | Default 1px borders, grid lines in plots, dividers between metric cells. |
-| `--rule-strong` | `#262D3F` | Borders around interactive elements (dropdown, button). |
-| `--rule-hot` | `#3A4258` | Hover/active borders, brand-mark border. |
+| `--void` | `#0F1B2E` | Page background (visible only at viewport edges). |
+| `--surface-0` | `#122036` | Header bar, controls panel, main canvas background. |
+| `--surface-1` | `#15243C` | Cards, sliders track inactive, dropdown trigger. |
+| `--surface-2` | `#1A2C46` | Mode-toggle active half, button default state. |
+| `--surface-3` | `#213658` | Hover states, dropdown items hover. |
 
-### Text
+### Hairlines — drawn-in-chalk on blueprint
+
 | Token | Hex | Use |
 |---|---|---|
-| `--text-1` | `#E9EBF0` | Primary — values, headlines, active states. |
-| `--text-2` | `#8C94A8` | Secondary — labels, captions. |
-| `--text-3` | `#535B6F` | Tertiary — section labels (small caps), units, axis ticks. |
-| `--text-4` | `#2F3447` | Quaternary — slider ticks, decorative dots. |
+| `--rule` | `#2B3C5A` | Default 1px borders, grid lines in plots, dividers between metric cells. |
+| `--rule-strong` | `#3D5378` | Borders around interactive elements (dropdown, button). |
+| `--rule-hot` | `#557099` | Hover/active borders, brand-mark border. |
+
+### Text — warm parchment ink
+
+| Token | Hex | Use |
+|---|---|---|
+| `--text-1` | `#EDE4D3` | Primary — values, headlines, active states. The "ink." |
+| `--text-2` | `#B5AB95` | Secondary — labels, captions. |
+| `--text-3` | `#7E7660` | Tertiary — section labels (small caps), units, axis ticks. |
+| `--text-4` | `#4A5670` | Quaternary — slider ticks, decorative dots. |
 
 ### Brand accents (semantic — each color has ONE job)
 
 | Token | Hex | Semantic role |
 |---|---|---|
-| `--amber` | `#FFB547` | **Noisy ECG trace.** Spike colour for **Layer 1 (input)**. Anything representing raw/sensory/interfered input. Reads as "warm electrical interference." |
-| `--cyan` | `#00D9C0` | **Reconstructed ECG trace.** Spike colour for **Layer 2 (hidden)**. **Positive ΔSNR.** The "NeuroFlux output" colour. The brand's primary accent. |
-| `--magenta` | `#FF6B9D` | **Negative ΔSNR only.** Replaces the red/green cliché. Distinctive and not alarming. |
-| `--bone` | `#F2F0E8` | Spike colour for **Layer 3 (output)**. Warm white — connotes "the decision layer." |
-| `--clean` | `#687386` | The clean reference ECG trace. Deliberately understated — it's the ground truth, not the hero. |
+| `--rust` | `#C04E2C` | **Reconstructed ECG trace.** Spike colour for **Layer 2 (hidden)**. **Positive ΔSNR.** The "NeuroFlux output" colour, the brand's primary accent. Reads as rust grease-pencil annotation on a schematic — the engineer's emphasis colour. |
+| `--sage` | `#88A57B` | **Noisy ECG trace.** Spike colour for **Layer 1 (input)**. Reads as "muted/dampened/wrong" — like oxidized stain on the blueprint, deliberately not the brand colour. |
+| `--mustard` | `#D4C158` | **Negative ΔSNR only.** Replaces the red/green cliché. Highest possible complementary contrast against prussian blue — pops as a warning without alarm. |
+| `--parchment` | `#EDE4D3` | Spike colour for **Layer 3 (output)**. Same as `--text-1` — connotes "the decision layer is rendered in pure ink." |
+| `--clean` | `#B5AB95` | The clean reference ECG trace. Deliberately understated — appears as a softly-drawn chalk line on the paper, ground truth not the hero. Same value as `--text-2`. |
 
 **Why no red/green for ΔSNR sign:** clinical UIs over-use red/green and
-evaluators in cardiology see them as alert signals (red = bad heart). Cyan
-positive + magenta negative reads as "fluorescence" — scientific rather than
-alarming. Cyan also doubles as the brand accent, reinforcing "positive Δ =
-NeuroFlux working."
+evaluators in cardiology see them as alert signals (red = bad heart). Rust
+positive + mustard negative reads as "annotation marks on a technical
+drawing" — scientific rather than alarming. Rust also doubles as the brand
+accent, reinforcing "positive Δ = NeuroFlux working."
 
-**Layer color logic:** input layer is amber (warm/raw), hidden is cyan
-(processing/the brand), output is bone (pure/decision). When you see the
-spike raster, layers stack from bottom (L1 amber) to top (L3 bone), so the
-eye reads "raw input rises through cyan processing into pure-white decisions."
+**Layer color logic:** input layer is sage (the noisy unprocessed raw),
+hidden is rust (processing/the brand emphasis), output is parchment
+(the pure decision in ink). The spike raster stacks bottom→top (L1 sage to
+L3 parchment), so the eye reads "muddied input rises through the rust-marked
+processing layer into pure ink decisions."
+
+**Why these colours work against prussian:**
+
+| Pairing | Why |
+|---|---|
+| Rust orange on prussian blue | Classic complementary contrast (orange ↔ blue). Maximum perceived saturation. Familiar visual language: construction signs, antique blueprints, traffic signage. |
+| Sage green on prussian blue | Soft contrast, reads as natural/quiet. Doesn't compete with the rust brand. |
+| Mustard yellow on prussian blue | Yellow vs blue = highest possible complementary contrast. Forces attention to negative-Δ states. |
+| Parchment cream on prussian | The blueprint signature. Maximal readability for text and data. |
 
 ---
 
@@ -224,13 +249,13 @@ it just as the metrics finish counting up.
 ## 7. Components
 
 ### 7.1 Header brand mark
-- 24×24 bordered square with a hand-drawn sine wave SVG inside.
+- 24×24 bordered square with a hand-drawn sine wave SVG inside, stroked in rust.
 - The wordmark uses a typographic split: **NEURO** in Inter Tight uppercase
-  (semibold, tracking 0.18em) + **flux** in Instrument Serif italic
-  lowercase, cyan. This single typographic moment carries the brand voice.
+  (semibold, tracking 0.18em, parchment) + **flux** in Instrument Serif italic
+  lowercase, **rust**. This single typographic moment carries the brand voice.
 
 ### 7.2 Meta-readout (header center)
-Single line of mono text showing the current config + a blinking cyan
+Single line of mono text showing the current config + a blinking rust
 cursor. **Pattern:** `K v · K v · K v` where keys are tertiary text, values
 are primary text, separated by `·` dot characters in `--text-4`. This is the
 single most "instrument-like" element — it tells the evaluator exactly what
@@ -251,8 +276,8 @@ ghosted "TAKE THE TOUR" button.
 **This is the most distinctive control.** Do NOT use a generic library
 slider — build it.
 - Track: 2px tall, `--surface-3` background.
-- Fill: 2px tall, `--cyan` with `box-shadow: 0 0 8px rgba(0,217,192,0.4)` for glow.
-- Handle: 12×12px diamond (rotated square), cyan, no border.
+- Fill: 2px tall, `--rust` with `box-shadow: 0 0 8px rgba(192,78,44,0.4)` for glow (reads as "warm ink imprint").
+- Handle: 12×12px diamond (rotated square), rust, no border.
 - Tick marks below: 5 vertical 3px hairlines in `--text-4`.
 - Header: name on left, mono value with unit on right.
 - Optional hint after name in tiny mono `--text-4` (`τ` slider shows "trace decay").
@@ -264,14 +289,14 @@ keyboard/ARIA for free without imposing visuals.
 ### 7.6 Dropdown
 - Trigger: mono record ID + small mono badge ("MIT-BIH · 30 min"), chevron right.
 - List: dark `--surface-2` with stronger border, max-height with scroll.
-- Items: hover background = `--surface-3`, hover text = cyan.
+- Items: hover background = `--surface-3`, hover text = rust.
 - Use `@radix-ui/react-popover` or `react-aria-components` for accessibility,
   styled per the mockup.
 
 ### 7.7 Mode toggle (PASSIVE / TRAINED)
 - Pill split into two equal halves.
 - A sliding indicator (`--surface-3` background) moves between halves with a
-  cyan border on the leading edge.
+  rust border on the leading edge.
 - Each half: mono name (uppercase) + tiny meta caption ("0 ep · STDP off" /
   "10 ep · STDP on").
 - **Below the toggle**: a one-line caption that changes with the mode and
@@ -281,17 +306,18 @@ keyboard/ARIA for free without imposing visuals.
 ### 7.8 Run button
 - 52px tall, full sidebar width.
 - Default: `--surface-2`, border `--rule-hot`, mono uppercase label, play glyph.
-- Hover: border cyan, label cyan, inner cyan glow.
+- Hover: border rust, label rust, inner rust glow.
 - Running: morph play-glyph into a spinning ring (CSS `border-top-color:
   transparent` + rotate animation), label becomes "Running…".
 
 ### 7.9 Hero plot
 - Custom SVG, NOT Plotly. Plotly's default styling is the give-away.
 - Stroke widths: noisy 1.1, clean 1.3, reconstructed 1.7. Reconstructed has
-  a cyan drop-shadow filter for the glow.
+  a rust drop-shadow filter for the glow (`drop-shadow(0 0 5px rgba(192,78,44,0.35))`) —
+  reads as "ink bleed on the paper."
 - R-peak markers: small triangles (8×7 px) pointing up, 10px above the peak.
-  Clean = outlined; reconstructed = filled cyan. They land AFTER the traces
-  finish drawing.
+  Clean = outlined in `--clean`; reconstructed = filled `--rust`. They land
+  AFTER the traces finish drawing.
 - Grid: 4 horizontal + 10 vertical hairlines in `--rule`. Axis ticks in mono.
 - **Subtle scanline overlay**: 1px transparent / 1px rgba-white(0.012)
   repeating gradient over the whole plot card. Almost invisible but adds
@@ -303,7 +329,7 @@ keyboard/ARIA for free without imposing visuals.
 ### 7.10 Spike raster
 - 200px tall area below the plot, sharing the same `x` scale.
 - 56 horizontal "rows" (one per neuron), with hairline rules separating layers.
-- Each spike: 2×4px vertical rect, colored by layer (amber / cyan / bone).
+- Each spike: 2×4px vertical rect, colored by layer (sage / rust / parchment).
 - Layer labels on RIGHT edge in mono small caps: `L1 · INPUT · 32`, etc.
 - Spikes fade in staggered by their `t` position — the raster looks like
   it's being scanned out, not just appearing. **This is the second most
@@ -315,10 +341,10 @@ keyboard/ARIA for free without imposing visuals.
   - Mono small-caps label
   - Huge mono number (28px) with smaller unit in `--text-3`
   - Sub-line or progress bar
-- ΔSNR cell uses `--cyan` if positive, `--magenta` if negative. **Never use
+- ΔSNR cell uses `--rust` if positive, `--mustard` if negative. **Never use
   red or green.**
 - rpeak cell includes a thin bar (3px) filling proportional to value (1.000
-  = full); bar uses cyan if ≥ 0.85, magenta if below.
+  = full); bar uses rust if ≥ 0.85, mustard if below.
 - Numbers should **count up** when results arrive (animate from previous
   value to new over 600ms with cubic ease-out).
 
@@ -345,34 +371,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        void:    '#07080D',
+        void:    '#0F1B2E',
         surface: {
-          0: '#0B0E16',
-          1: '#11151F',
-          2: '#161B28',
-          3: '#1D2331',
+          0: '#122036',
+          1: '#15243C',
+          2: '#1A2C46',
+          3: '#213658',
         },
         rule: {
-          DEFAULT: '#1A2030',
-          strong:  '#262D3F',
-          hot:     '#3A4258',
+          DEFAULT: '#2B3C5A',
+          strong:  '#3D5378',
+          hot:     '#557099',
         },
-        ink: {                          // "text" namespace
-          1: '#E9EBF0',
-          2: '#8C94A8',
-          3: '#535B6F',
-          4: '#2F3447',
+        ink: {                          // "text" namespace — parchment scale
+          1: '#EDE4D3',
+          2: '#B5AB95',
+          3: '#7E7660',
+          4: '#4A5670',
         },
         signal: {
-          clean:         '#687386',
-          noisy:         '#FFB547',
-          reconstructed: '#00D9C0',
+          clean:         '#B5AB95',
+          noisy:         '#88A57B',
+          reconstructed: '#C04E2C',
         },
         accent: {
-          amber:   '#FFB547',
-          cyan:    '#00D9C0',
-          magenta: '#FF6B9D',
-          bone:    '#F2F0E8',
+          rust:      '#C04E2C',         // brand · L2 · positive Δ
+          sage:      '#88A57B',         // noisy · L1
+          mustard:   '#D4C158',         // negative Δ
+          parchment: '#EDE4D3',         // L3 · primary ink
         },
       },
       fontFamily: {
@@ -385,8 +411,8 @@ export default {
         'instrument-inout': 'cubic-bezier(.65, 0, .35, 1)',
       },
       boxShadow: {
-        'glow-cyan':    '0 0 8px rgba(0,217,192,0.4)',
-        'glow-magenta': '0 0 6px rgba(255,107,157,0.35)',
+        'glow-rust':    '0 0 8px rgba(192,78,44,0.4)',
+        'glow-mustard': '0 0 6px rgba(212,193,88,0.35)',
       },
     },
   },
@@ -471,20 +497,20 @@ everything else should feel subtle.
 
 If your friend cuts corners on these, the design loses its character:
 
-1. **The trace draw-on.** Reconstructed last and brightest. Cyan drop-shadow.
+1. **The trace draw-on.** Reconstructed last and brightest. Rust drop-shadow ("ink bleed on paper").
 2. **The number-counting metrics.** Not a fade. An actual numeric tween.
-3. **The blinking cyan cursor** at the end of the meta-readout. 1.1s steps.
-4. **The faint scanline overlay** on the plot card. Almost invisible.
+3. **The blinking rust cursor** at the end of the meta-readout. 1.1s steps.
+4. **The faint warm-cream scanline overlay** on the plot card. Almost invisible — reads as paper grain.
 5. **The page-wide film grain** (SVG noise) at `opacity: 0.4 mix-blend overlay`.
 6. **The mode-toggle caption** that cites the Phase 3 finding — make the
-   `rpeak = 1.000` part cyan.
+   `rpeak = 1.000` part rust.
 7. **The hairline gap-as-border trick** for the metrics row (1px gap with
-   dark background = inter-cell rules without box-shadow).
+   `bg-rule` = inter-cell rules without box-shadow).
 8. **JetBrains Mono with tabular-nums** for ALL numerics. Numbers don't dance
    when their values change.
 9. **R-peak markers landing AFTER the traces draw.** Sequence matters.
-10. **The brand split**: `NEURO` semibold uppercase + `flux` Instrument Serif
-    italic lowercase cyan. The single most distinctive typographic moment.
+10. **The brand split**: `NEURO` semibold uppercase (parchment) + `flux` Instrument
+    Serif italic lowercase **rust**. The single most distinctive typographic moment.
 
 ---
 
@@ -499,8 +525,11 @@ If your friend cuts corners on these, the design loses its character:
 - **Rounded corners.** Inputs and cards have 0px or 2px (dropdown list) only.
   Sharp edges support the instrument feel.
 - **Gradients.** The only gradient is the radial atmosphere on `body`
-  (extremely subtle). No gradient buttons, no gradient text.
+  (extremely subtle warm rust + sage washes). No gradient buttons, no gradient text.
 - **Purple.** The classic AI-slop accent. Forbidden.
+- **Cyan + dark.** The default 2024–2025 AI-generated dashboard combo.
+  Forbidden — that's the entire reason we picked this palette over the
+  original direction.
 - **Tooltips on every control.** The mockup uses inline `.hint` text where
   context is needed; tooltips are reserved for sliders' parameter
   explanations from `CLAUDE.md` / `docs/phase3_findings.md`.
@@ -516,8 +545,8 @@ When you implement a component, verify against this list before merging:
 - [ ] Numbers use `font-variant-numeric: tabular-nums`.
 - [ ] Hairlines are 1px solid `--rule` (or `--rule-strong` for interactive
       borders). No box-shadows.
-- [ ] Colors used semantically: cyan = reconstructed/positive/L2; amber =
-      noisy/L1; magenta = negative ΔSNR; bone = L3; clean = `--clean`.
+- [ ] Colors used semantically: rust = reconstructed/positive/L2; sage =
+      noisy/L1; mustard = negative ΔSNR; parchment = L3; `--clean` = clean trace.
 - [ ] Mono small-caps labels with `letter-spacing: 0.14em–0.16em` and
       `font-size: 10–11px`.
 - [ ] Hover transitions are 160ms `ease-out` (or use `--instrument-out`).
