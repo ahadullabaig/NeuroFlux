@@ -16,13 +16,15 @@ from neuroflux_core.io.config import LIFConfig, STDPConfig
 from neuroflux_core.metrics.snr import calculate_snr
 from neuroflux_core.network.feedforward import FeedForwardNetwork, Network
 from neuroflux_core.network.simulator import Simulator
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from neuroflux_datasets.synthetic import SignalGenerator
 
 
 class Phase2Config(BaseModel):
     """Pydantic schema for Phase 2 validation sweep configurations."""
+
+    model_config = ConfigDict(extra="forbid")
 
     signal_types: list[Literal["ecg", "eeg", "sine"]]
     flicker_frequencies: list[float]
@@ -32,6 +34,25 @@ class Phase2Config(BaseModel):
     flicker_amplitude: float = 0.5
     seeds_per_config: int = 10
     duration_s: float = 1.0
+    network_layers: list[int] = Field(default_factory=lambda: [32, 16, 8])
+
+
+class Phase3Config(BaseModel):
+    """Pydantic schema for Phase 3 MIT-BIH sweep configurations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dataset: Literal["mit-bih"] = "mit-bih"
+    record_ids: list[str]
+    flicker_frequencies: list[float]
+    input_snrs: list[float]
+    training_epochs: list[int]
+    stdp_taus: list[float]
+    flicker_amplitude: float = 0.5
+    seeds_per_config: int = 10
+    duration_s: float = 10.0
+    cache_dir: str = "data/mit_bih"
+    network_layers: list[int] = Field(default_factory=lambda: [32, 16, 8])
 
 
 @dataclass
@@ -44,6 +65,9 @@ class RunResult:
     seed: int
     delta_snr: float
     convergence_speed: int
+    dataset: str = "synthetic"
+    record_id: str | None = None
+    rpeak_integrity: float | None = None
 
 
 class ResultsDB:
@@ -54,6 +78,7 @@ class ResultsDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.db_path))
         self._init_db()
+        self._migrate()
 
     def _init_db(self) -> None:
         with self.conn:
@@ -67,9 +92,38 @@ class ResultsDB:
                     stdp_tau REAL,
                     seed INTEGER,
                     delta_snr REAL,
-                    convergence_speed INTEGER
+                    convergence_speed INTEGER,
+                    dataset TEXT DEFAULT 'synthetic',
+                    record_id TEXT,
+                    rpeak_integrity REAL
                 )
             """)
+
+    def _migrate(self) -> None:
+        """Add missing columns to an existing pre-Phase-3 database.
+
+        Uses ``PRAGMA table_info`` to detect which columns exist and
+        ``ALTER TABLE ... ADD COLUMN`` for any that are missing.  This
+        allows old 8-column ``results/full_sweep.db`` files created by
+        Phase 2 to be upgraded in place.
+        """
+        cursor = self.conn.execute("PRAGMA table_info(runs)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        migrations: list[str] = []
+        if "dataset" not in existing_columns:
+            migrations.append(
+                "ALTER TABLE runs ADD COLUMN dataset TEXT DEFAULT 'synthetic'"
+            )
+        if "record_id" not in existing_columns:
+            migrations.append("ALTER TABLE runs ADD COLUMN record_id TEXT")
+        if "rpeak_integrity" not in existing_columns:
+            migrations.append("ALTER TABLE runs ADD COLUMN rpeak_integrity REAL")
+
+        if migrations:
+            with self.conn:
+                for sql in migrations:
+                    self.conn.execute(sql)
 
     def insert_result(self, res: RunResult) -> None:
         with self.conn:
@@ -77,8 +131,9 @@ class ResultsDB:
                 """
                 INSERT INTO runs
                 (signal_type, flicker_freq, input_snr, epochs,
-                 stdp_tau, seed, delta_snr, convergence_speed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 stdp_tau, seed, delta_snr, convergence_speed,
+                 dataset, record_id, rpeak_integrity)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     res.signal_type,
@@ -89,6 +144,9 @@ class ResultsDB:
                     res.seed,
                     res.delta_snr,
                     res.convergence_speed,
+                    res.dataset,
+                    res.record_id,
+                    res.rpeak_integrity,
                 ),
             )
 
@@ -136,6 +194,48 @@ def _compute_convergence_speed(
     return len(epoch_delta_snrs)
 
 
+def _resolve_signal(params: dict[str, Any], fs: float) -> tuple[np.ndarray, np.ndarray]:
+    """Dispatch signal generation based on the ``dataset`` parameter.
+
+    - ``"synthetic"`` (default): uses :class:`SignalGenerator` — the exact
+      Phase 2 path.
+    - ``"mit-bih"``: lazily imports :func:`mit_bih.annotator.make_pair`
+      so that Phase 2 code never loads ``wfdb``.
+
+    Args:
+        params: Task parameter dict (must contain signal-generation keys).
+        fs: Sampling frequency in Hz.
+
+    Returns:
+        ``(clean, noisy)`` signal pair.
+    """
+    dataset = params.get("dataset", "synthetic")
+
+    if dataset == "mit-bih":
+        from neuroflux_datasets.mit_bih.annotator import make_pair  # noqa: PLC0415
+
+        return make_pair(
+            record_id=params["record_id"],
+            cache_dir=params["cache_dir"],
+            duration_s=params["duration_s"],
+            flicker_freq=params["flicker_freq"],
+            flicker_amplitude=params.get("flicker_amplitude", 0.5),
+            snr_db=params["input_snr"],
+            fs=fs,
+            seed=params["seed"],
+        )
+
+    # Default: synthetic path (byte-identical to Phase 2)
+    gen = SignalGenerator(fs=fs, seed=params["seed"])
+    return gen.generate(
+        signal_type=params["signal_type"],
+        duration_s=params["duration_s"],
+        flicker_freq=params["flicker_freq"],
+        flicker_amplitude=params.get("flicker_amplitude", 0.5),
+        snr_db=params["input_snr"],
+    )
+
+
 def run_single_experiment(params: dict[str, Any]) -> RunResult:
     """Executes a single SNN parameter configuration."""
     signal_type = params["signal_type"]
@@ -145,20 +245,18 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
     stdp_tau = params["stdp_tau"]
     seed = params["seed"]
     duration_s = params["duration_s"]
-    flicker_amplitude = params.get("flicker_amplitude", 0.5)
+    dataset = params.get("dataset", "synthetic")
+    record_id = params.get("record_id")
 
     fs = 250.0
     dt = 1000.0 / fs  # 4.0 ms
 
-    # 1. Generate Signal
-    gen = SignalGenerator(fs=fs, seed=seed)
-    clean, noisy = gen.generate(
-        signal_type=signal_type,
-        duration_s=duration_s,
-        flicker_freq=flicker_freq,
-        flicker_amplitude=flicker_amplitude,
-        snr_db=input_snr,
-    )
+    # Network architecture (default preserves Phase 2 / pre-Phase-3 behavior).
+    network_layers: list[int] = params.get("network_layers") or [32, 16, 8]
+    n_input = network_layers[0]
+
+    # 1. Generate Signal (dispatches on dataset)
+    clean, noisy = _resolve_signal(params, fs)
 
     # Calculate baseline SNR
     base_snr = calculate_snr(clean, noisy)
@@ -171,7 +269,7 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
 
     # 2. Configure SNN
     net = Network.feedforward(
-        layers=[32, 16, 8],
+        layers=network_layers,
         neuron=LIFConfig(),
         plasticity=STDPConfig(tau_plus=stdp_tau, tau_minus=stdp_tau),
         seed=seed,
@@ -187,8 +285,8 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
 
     sim = Simulator(net, dt=dt, seed=seed, encoder=encoder, decoder=decoder)
 
-    # SNN expects (T, n_input). Copy single channel to 32 inputs.
-    time_varying_noisy = np.tile(noisy, (32, 1)).T
+    # SNN expects (T, n_input). Tile single channel across the input layer.
+    time_varying_noisy = np.tile(noisy, (n_input, 1)).T
 
     assert isinstance(sim.network, FeedForwardNetwork)
 
@@ -229,6 +327,13 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
         delta_snr,
     )
 
+    # 5. Compute R-peak integrity (MIT-BIH only)
+    rpeak_score: float | None = None
+    if dataset == "mit-bih":
+        from neuroflux_core.metrics.rpeak import rpeak_integrity  # noqa: PLC0415
+
+        rpeak_score = rpeak_integrity(clean, reconstructed, fs)
+
     return RunResult(
         signal_type=signal_type,
         flicker_freq=flicker_freq,
@@ -238,19 +343,14 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
         seed=seed,
         delta_snr=delta_snr,
         convergence_speed=convergence_speed,
+        dataset=dataset,
+        record_id=record_id,
+        rpeak_integrity=rpeak_score,
     )
 
 
-def run_experiment_command(args: argparse.Namespace) -> None:
-    """Handles the 'run' CLI command."""
-    with open(args.config) as f:
-        raw_config = yaml.safe_load(f)
-
-    config = Phase2Config(**raw_config)
-
-    db = ResultsDB(args.output_db)
-
-    # Generate Cartesian product of all parameters
+def _build_phase2_tasks(config: Phase2Config) -> list[dict[str, Any]]:
+    """Build task dicts from a Phase 2 config (Cartesian product)."""
     param_combinations = list(
         itertools.product(
             config.signal_types,
@@ -262,7 +362,7 @@ def run_experiment_command(args: argparse.Namespace) -> None:
         )
     )
 
-    tasks = []
+    tasks: list[dict[str, Any]] = []
     for params in param_combinations:
         tasks.append(
             {
@@ -274,16 +374,114 @@ def run_experiment_command(args: argparse.Namespace) -> None:
                 "seed": params[5],
                 "duration_s": config.duration_s,
                 "flicker_amplitude": config.flicker_amplitude,
+                "network_layers": config.network_layers,
             }
         )
+    return tasks
+
+
+def _build_phase3_tasks(config: Phase3Config) -> list[dict[str, Any]]:
+    """Build task dicts from a Phase 3 config (Cartesian product over records)."""
+    param_combinations = list(
+        itertools.product(
+            config.record_ids,
+            config.flicker_frequencies,
+            config.input_snrs,
+            config.training_epochs,
+            config.stdp_taus,
+            range(config.seeds_per_config),
+        )
+    )
+
+    tasks: list[dict[str, Any]] = []
+    for params in param_combinations:
+        tasks.append(
+            {
+                "dataset": "mit-bih",
+                "signal_type": "ecg",  # for analysis.py grouping
+                "record_id": params[0],
+                "flicker_freq": params[1],
+                "input_snr": params[2],
+                "epochs": params[3],
+                "stdp_tau": params[4],
+                "seed": params[5],
+                "duration_s": config.duration_s,
+                "flicker_amplitude": config.flicker_amplitude,
+                "cache_dir": config.cache_dir,
+                "network_layers": config.network_layers,
+            }
+        )
+    return tasks
+
+
+def _build_tasks(raw_config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Dispatch task building based on the ``dataset`` key in raw YAML."""
+    dataset = raw_config.get("dataset", "synthetic")
+    if dataset == "mit-bih":
+        config = Phase3Config(**raw_config)
+        return _build_phase3_tasks(config)
+    # Default: Phase 2 synthetic
+    config_p2 = Phase2Config(**raw_config)
+    return _build_phase2_tasks(config_p2)
+
+
+def run_experiment_command(args: argparse.Namespace) -> None:
+    """Handles the 'run' CLI command."""
+    with open(args.config) as f:
+        raw_config = yaml.safe_load(f)
+
+    tasks = _build_tasks(raw_config)
+
+    dataset = raw_config.get("dataset", "synthetic")
+
+    # --- Dry-run mode ---
+    if getattr(args, "dry_run", False):
+        print(f"Dry run: {len(tasks)} tasks validated.")
+        print(f"  Dataset: {dataset}")
+
+        if dataset == "mit-bih":
+            config = Phase3Config(**raw_config)
+            print(f"  Records: {len(config.record_ids)}")
+            print(f"  Flicker frequencies: {config.flicker_frequencies}")
+            print(f"  Input SNRs: {config.input_snrs}")
+            print(f"  Training epochs: {config.training_epochs}")
+            print(f"  STDP taus: {config.stdp_taus}")
+            print(f"  Seeds per config: {config.seeds_per_config}")
+            print(f"  Duration: {config.duration_s}s")
+            print(f"  Cache dir: {config.cache_dir}")
+
+            from neuroflux_datasets.mit_bih.downloader import (  # noqa: PLC0415
+                verify_records,
+            )
+
+            missing = verify_records(config.record_ids, config.cache_dir)
+            if missing:
+                print(f"  Missing records ({len(missing)}): {missing}")
+            else:
+                print("  All records cached.")
+        else:
+            config_p2 = Phase2Config(**raw_config)
+            print(f"  Signal types: {config_p2.signal_types}")
+            print(f"  Flicker frequencies: {config_p2.flicker_frequencies}")
+            print(f"  Input SNRs: {config_p2.input_snrs}")
+            print(f"  Training epochs: {config_p2.training_epochs}")
+            print(f"  STDP taus: {config_p2.stdp_taus}")
+            print(f"  Seeds per config: {config_p2.seeds_per_config}")
+            print(f"  Duration: {config_p2.duration_s}s")
+
+        return
+
+    db = ResultsDB(args.output_db)
 
     print(f"Starting execution of {len(tasks)} runs...")
 
     # Execute in parallel
     completed = 0
+    failures: list[tuple[dict[str, Any], BaseException]] = []
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = {executor.submit(run_single_experiment, t): t for t in tasks}
         for future in concurrent.futures.as_completed(futures):
+            task = futures[future]
             try:
                 res = future.result()
                 db.insert_result(res)
@@ -291,9 +489,19 @@ def run_experiment_command(args: argparse.Namespace) -> None:
                 if completed % 10 == 0:
                     print(f"Completed {completed} / {len(tasks)} runs...")
             except Exception as e:
-                print(f"Error in run: {e}")
+                print(f"Error in run {task}: {e!r}")
+                failures.append((task, e))
 
-    print(f"Finished {completed} runs. Results saved to {args.output_db}")
+    print(
+        f"Finished {completed} / {len(tasks)} runs. Results saved to {args.output_db}"
+    )
+
+    if failures:
+        first_task, first_exc = failures[0]
+        raise RuntimeError(
+            f"{len(failures)} / {len(tasks)} runs failed. "
+            f"First failure (task={first_task}): {first_exc!r}"
+        )
 
 
 def analyze_significance_command(args: argparse.Namespace) -> None:
@@ -432,6 +640,12 @@ def main() -> None:
         type=str,
         default="results.db",
         help="Path to the SQLite output database.",
+    )
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Validate config and print task count without running.",
     )
 
     analyze_parser = subparsers.add_parser(

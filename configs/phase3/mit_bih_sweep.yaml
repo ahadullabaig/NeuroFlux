@@ -1,0 +1,51 @@
+# Phase 3 — Full MIT-BIH Sweep Configuration
+# Comprehensive parameter sweep over real ECG data.
+#
+# Usage:
+#   uv run neuroflux-experiment run configs/phase3/mit_bih_sweep.yaml --output-db results/phase3_sweep.db
+#   uv run neuroflux-experiment run configs/phase3/mit_bih_sweep.yaml --dry-run
+
+dataset: mit-bih
+
+# Representative subset of 48 MIT-BIH records spanning normal, arrhythmic,
+# and paced rhythms.
+record_ids:
+  - "100"
+  - "101"
+  - "103"
+  - "105"
+  - "108"
+  - "112"
+  - "113"
+  - "119"
+  - "200"
+  - "207"
+  - "212"
+  - "214"
+  - "228"
+  - "231"
+  - "232"
+  - "234"
+
+flicker_frequencies:
+  - 50.0
+  - 60.0
+
+input_snrs:
+  - 0.0
+  - 5.0
+  - 10.0
+  - 20.0
+
+training_epochs:
+  - 10
+  - 50
+
+stdp_taus:
+  - 10.0
+  - 20.0
+
+flicker_amplitude: 0.5
+seeds_per_config: 5
+duration_s: 10.0
+cache_dir: data/mit_bih

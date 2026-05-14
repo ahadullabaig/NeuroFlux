@@ -6,9 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**NeuroFlux** — a Python-based Spiking Neural Network (SNN) framework for adaptive flicker suppression in temporal biomedical signals (ECG, EEG, PPG). The mechanism is biologically inspired: STDP-driven unsupervised learning amplifies recurring signal structure and passively suppresses noise, with no labeled training data required.
+**NeuroFlux** — a Python-based Spiking Neural Network (SNN) framework for adaptive flicker handling in temporal biomedical signals (ECG, EEG, PPG). Two mechanisms work together: the *passive* architecture (LIF membrane filtering + Poisson rate encoding + population decoding) preserves clinical landmarks (R-peaks) across noise regimes; STDP-driven unsupervised learning adds amplitude-domain SNR improvement at low input SNR. No labeled training data required. The original proposal framed this as a single "STDP denoiser" mechanism — Phase 3's real-data findings showed the passive architecture is doing as much work as STDP, and they make different trade-offs. See `docs/phase3_findings.md` for the precise characterization.
 
-**Phases 0, 1, and 2 are complete.** Next is Phase 3 (real biomedical dataset integration). See `PLAN.md` for the full 16-week roadmap and `DETAILS.md` for the full technical specification.
+**Phases 0–3 are complete.** Next is Phase 4 (baseline comparison framework — `packages/baselines/`). See `PLAN.md` for the full 16-week roadmap and `DETAILS.md` for the full technical specification.
+
+**Phase 3 produced a regime-characterization result, not the absolute-improvement result the original proposal anticipated.** The full sweep + diagnostic experiments are documented in `docs/phase3_findings.md`. Headline: the SNN has a regime-dependent advantage (improves ΔSNR at input SNR ≤ 0 dB, degrades it at higher SNR); the *passive* untrained network already preserves R-peaks perfectly (rpeak=1.000), and STDP training adds ΔSNR but damages rpeak. The canonical positive config (record 214, 50 Hz, 0 dB, 10 epochs, τ=10 ms) is pinned in `tests/datasets/test_phase3_regression.py`. Phase 4 plans (in PLAN.md) are revised to compare per input-SNR class and treat passive vs. trained NeuroFlux as an ablation baseline.
+
+**The original "output SNR floor at 10-12 dB" hypothesis was rejected by direct measurement** (`docs/phase3_findings.md` §5.6.1). Running the SNN on a clean signal gives intrinsic output SNR ≈ 0.7 dB, not 10-12. The apparent floor seen in the main sweep is a training-regime effect (noise acts as an implicit regularizer in STDP), not an architectural capacity ceiling. Phase 6 hyperparameter optimization should target the joint (ΔSNR × rpeak) trade-off, **not** "lift the floor" by scaling the output population — `[64, 32, 64]` actually collapses rpeak (see §5.6.3).
 
 ---
 
@@ -19,10 +23,12 @@ make install      # uv sync --all-packages
 make test         # NUMBA_DISABLE_JIT=1 pytest tests/ packages/ --cov=packages/
 make test-fast    # same but -m "not slow" — used in CI, excludes sweep tests
 make test-slow    # only @pytest.mark.slow tests (runs actual experiment sweeps)
-make lint         # ruff check + mypy (strict)
+make lint         # ruff check + mypy . (strict) — see CI warning below
 make format       # ruff format
 make clean        # remove __pycache__, .pytest_cache, .ruff_cache, .mypy_cache
 ```
+
+**`make lint` does NOT match CI.** CI runs three gate steps — `ruff format --check .`, `ruff check .`, `mypy .` — but `make lint` only runs the last two. A branch can pass `make lint` and still fail CI on formatting. Before pushing, also run `make format` (or `uv run ruff format --check .`).
 
 Run a single test file:
 ```bash
@@ -51,15 +57,21 @@ uv run mypy packages/core/
 ```
 neuroflux/
 ├── packages/
-│   ├── core/           # neuroflux-core — Phase 1 (complete)
-│   ├── datasets/       # neuroflux-datasets — Phase 2 (complete)
-│   └── baselines/      # neuroflux-baselines — Phase 4 (stub only)
-├── configs/phase2/     # full_sweep.yaml, quick_validation.yaml
-├── results/            # full_sweep.db, significance_results.csv, figures/
-├── tests/              # integration + property + snapshot tests
-├── experiments/        # phase2_analysis.ipynb
-├── docs/               # Architecture docs (empty, Phase 7)
-└── pyproject.toml      # uv workspace root; dev deps (pytest, ruff, mypy, mlflow)
+│   ├── core/                       # neuroflux-core — Phase 1 (complete)
+│   ├── datasets/                   # neuroflux-datasets — Phases 2 & 3 (complete)
+│   └── baselines/                  # neuroflux-baselines — Phase 4 (stub only)
+├── configs/phase2/                 # full_sweep.yaml, quick_validation.yaml
+├── configs/phase3/                 # mit_bih_sweep.yaml, quick_validation.yaml,
+│                                   # diagnostic_untrained.yaml,
+│                                   # diagnostic_network_sweep_{8,16,32,64}.yaml
+├── scripts/phase3_diagnostics/     # populate_manifest.py, output_snr_floor.py
+├── results/                        # full_sweep.db, significance_results.csv,
+│                                   # phase3_full_sweep.db, phase3_full_sig/,
+│                                   # phase3_full_figures/, phase3_diagnostics/
+├── tests/                          # integration + property + snapshot tests
+├── experiments/                    # phase2_analysis.ipynb, phase3_analysis.ipynb
+├── docs/                           # phase3_findings.md (Phase 7 fills the rest)
+└── pyproject.toml                  # uv workspace root; dev deps
 ```
 
 `packages/core/src/neuroflux_core/` internal layout follows the PLAN.md module breakdown exactly: `neurons/`, `synapses/`, `encoders/`, `decoders/`, `network/`, `metrics/`, `io/`.
@@ -135,11 +147,14 @@ analog signal → Encoder → input_spikes (bool[N_in])
 ### Metrics (`metrics/`)
 
 - `calculate_snr(signal_true, signal_pred)` → dB (primary benchmark metric)
+- `rpeak_integrity(clean, reconstructed, fs, tol_ms=50.0)` → float ∈ [0,1] (Phase 3 — clinical ECG R-peak preservation; greedy peak matching via `scipy.signal.find_peaks`)
 - `winner_take_all(spike_counts)` → int
 - `classification_accuracy(predicted, true)` → float
 - `mean_firing_rate(spike_train, dt)` → Hz per neuron
 - `silent_neuron_fraction(spike_train)` → float
 - `fano_factor(spike_train, dt, window_ms)` → per neuron
+
+**Re-export asymmetry:** `metrics/__init__.py` re-exports **only** `rpeak_integrity` (`__all__ = ["rpeak_integrity"]`). The other five live in submodules and must be imported by full path — e.g. `from neuroflux_core.metrics.snr import calculate_snr`, not `from neuroflux_core.metrics import calculate_snr`. (Inconsistent — a candidate for cleanup, but match the existing pattern until then.)
 
 ---
 
@@ -164,9 +179,9 @@ uv run neuroflux-experiment run <config.yaml> --output-db <path>
 uv run neuroflux-experiment analyze-significance <db> --output-dir <dir> --p-threshold 0.01
 ```
 
-`Phase2Config` — Pydantic v2 model with fields: `signal_types`, `flicker_frequencies`, `input_snrs`, `training_epochs`, `stdp_taus`, `flicker_amplitude` (default 0.5), `seeds_per_config`, `duration_s`. `run_experiment_command` uses `ProcessPoolExecutor` (scales to `os.cpu_count()`).
+`Phase2Config` — Pydantic v2 model with `extra="forbid"` and fields: `signal_types`, `flicker_frequencies`, `input_snrs`, `training_epochs`, `stdp_taus`, `flicker_amplitude` (default 0.5), `seeds_per_config`, `duration_s`, `network_layers` (default `[32, 16, 8]`). `run_experiment_command` uses `ProcessPoolExecutor` (scales to `os.cpu_count()`) and **raises `RuntimeError` if any per-task run failed** (loud failures — added post-Phase-3 for Phase 4 readiness). Successful rows are still inserted before the raise.
 
-`ExperimentResult` — dataclass with `delta_snr` (float) and `convergence_speed` (int).
+`RunResult` (`cli.py`) — the result dataclass for **both** Phase 2 and Phase 3 runs. Fields: `signal_type`, `flicker_freq`, `input_snr`, `epochs`, `stdp_tau`, `seed`, `delta_snr`, `convergence_speed`, plus the Phase 3 additions `dataset` (default `"synthetic"`), `record_id` (default `None`), `rpeak_integrity` (default `None`). The defaults are what keep Phase 2 callers valid — see the Phase 3 section. `insert_result` is a fixed-column INSERT, so it must change in lockstep with this dataclass.
 
 ### Analysis (`analysis.py`)
 
@@ -187,6 +202,38 @@ uv run neuroflux-experiment analyze-significance <db> --output-dir <dir> --p-thr
 
 ---
 
+## Phase 3 package (`neuroflux_datasets.mit_bih`)
+
+Real biomedical dataset integration — MIT-BIH Arrhythmia Database (ECG). Modules: `downloader.py` (fetch + cache + SHA-256 verify), `preprocessor.py` (resample 360→250 Hz, normalize), `annotator.py` (`extract_clean_segments`, `make_pair`), `loader.py` (`train_test_split`, record-wise). The experiment runner dispatches on a top-level `dataset:` key in the YAML config — `mit-bih` → `Phase3Config` → `_build_phase3_tasks`; absent/`synthetic` → the unchanged Phase 2 path. `wfdb` is **lazy-imported** everywhere — Phase 2 code never loads it. Downloaded records cache to a gitignored `data/` dir; never commit them.
+
+`Phase3Config` — Pydantic v2 model with `extra="forbid"`: `dataset` (`"mit-bih"`), `record_ids`, `flicker_frequencies`, `input_snrs`, `training_epochs`, `stdp_taus`, `flicker_amplitude` (default 0.5), `seeds_per_config`, `duration_s` (default 10.0), `cache_dir` (default `"data/mit_bih"`), `network_layers` (default `[32, 16, 8]`). Phase 3 task dicts also inject `signal_type="ecg"` so `analysis.py`'s `signal_type` grouping still works. `run` gained a `--dry-run` flag (validates the config, prints task count, calls `verify_records` — opens no DB, runs no simulation).
+
+**`network_layers` field** — shared by both Phase2Config and Phase3Config. Default `[32, 16, 8]` preserves all pre-Phase-3 behavior (Phase 2 regression test verified byte-identically). `run_single_experiment` uses `params["network_layers"][0]` to tile the single-channel input across the input layer, so changing this field correctly resizes the input tile. Phase 3 §5.6.3 found `[32, 32, 32]` outperforms the default on real ECG; this is the recommended starting point for Phase 6 hyperparameter optimization. Wide configurations (input layer ≥ 64) collapse rpeak — see `docs/phase3_findings.md` §5.6.3.
+
+**`ResultsDB` schema migration.** `RunResult` gained `dataset`/`record_id`/`rpeak_integrity` (all with defaults). `ResultsDB._migrate()` runs `PRAGMA table_info(runs)` + `ALTER TABLE ... ADD COLUMN` on open, upgrading an existing pre-Phase-3 8-column `results/full_sweep.db` in place — old rows stay readable, the migration is idempotent. `rpeak_integrity` is computed **only** on the `mit-bih` branch; synthetic runs leave it `None`.
+
+### Phase 3 known limitations / notes for later phases
+
+**SHA-256 integrity verification is now partially active.** 16 of 48 manifest entries carry real checksums — specifically the records used in the Phase 3 sweep (100, 101, 103, 105, 108, 112, 113, 119, 200, 207, 212, 214, 228, 231, 232, 234). The remaining 32 records keep `"dat_checksum": null` and continue to trust the cache as before. To extend coverage: download additional records, then run `uv run python scripts/phase3_diagnostics/populate_manifest.py` (idempotent — re-runs lift any new provenance checksums into the manifest, refuse to overwrite mismatches).
+
+**Phase 3 produced a regime-characterization result.** Full analysis: `docs/phase3_findings.md`. Key facts every contributor should know:
+- The SNN does **not** behave as a broad denoiser on real ECG. Mean ΔSNR is negatively correlated with input SNR (improves at ≤ 0 dB, degrades at ≥ 5 dB).
+- The **passive (untrained, epochs=0) network preserves R-peaks perfectly** (`rpeak_integrity = 1.000`) across all input SNRs. STDP training adds ~3-4 dB of ΔSNR but damages rpeak (to 0.51-0.89 depending on epoch count). This is documented at `docs/phase3_findings.md` §5.6.2 — it's the most important diagnostic finding.
+- Phase 4 should treat *passive NeuroFlux* (configs with `training_epochs: [0]`) as its own baseline alongside the classical filters.
+- Phase 4 comparisons must stratify by input SNR class (0, 5, 10, 20 dB) — the regime advantage is not visible in global aggregates.
+
+**Phase 3 regression test** (`tests/datasets/test_phase3_regression.py`) pins the canonical positive config: record 214, 50 Hz flicker, 0 dB input SNR, 10 epochs, τ=10 ms, seed=0, 10 s duration. Asserts `delta_snr ≥ 1.5 dB` and `rpeak_integrity ≥ 0.85`. **Skips cleanly if `data/mit_bih/214.dat` is absent** (so CI without bundled data still passes); runs locally if the record is cached. Pre-cache with `uv run python -c "from neuroflux_datasets.mit_bih.downloader import download_record; download_record('214', 'data/mit_bih')"`.
+
+**Diagnostic scripts and configs** live at `scripts/phase3_diagnostics/` and `configs/phase3/diagnostic_*.yaml`. They are reproducible (deterministic seeds, results checked into `results/phase3_diagnostics/`). If you need to re-establish the Phase 3 mechanistic claims, re-run them in this order: `populate_manifest.py` → `output_snr_floor.py` → `diagnostic_untrained.yaml` → `diagnostic_network_sweep_{8,16,32,64}.yaml`. Total wall time ≈ 10 min on 16 cores.
+
+**`extract_clean_segments` resamples each window individually**, not the whole record once — this introduces minor polyphase edge artifacts at window boundaries. Negligible for the 5–10 s windows used in Phase 3 configs; revisit if shorter windows or boundary-sensitive metrics are added.
+
+**Annotation symbol `+` (rhythm change) is treated as an artifact** in `_ARTIFACT_SYMBOLS` alongside `~` and `|`. In MIT-BIH `+` marks rhythm changes, not noise — this is a deliberately conservative choice that discards some usable clean windows. Defensible, but if clean-segment yield is too low for a record, relax this set.
+
+**`run_experiment_command` swallows per-run exceptions** (`except Exception` → prints `Error in run`). A single bad run (e.g. an R-peak length mismatch from a non-integer `duration_s`, or a missing cached record) is logged and skipped, not raised. Keep `duration_s` integer-valued and pre-cache records (`--dry-run` reports missing ones) so silent drops don't go unnoticed.
+
+---
+
 ## Critical non-obvious constraints
 
 **`NUMBA_DISABLE_JIT=1` in tests.** The Makefile sets this for `make test`. Without it, Numba JIT compiles on the first call, which adds ~5–10 s of cold-start latency per test session. The performance benchmark test (`test_benchmark.py`) is explicitly skipped when this env var is set — run it separately without the var to validate PLAN.md's "640 synapses, 10k timesteps < 2s" acceptance criterion.
@@ -197,7 +244,7 @@ uv run neuroflux-experiment analyze-significance <db> --output-dir <dir> --p-thr
 
 **Snapshot tests are SHA-256 pinned** (`tests/core/network/test_snapshot.py`). If any change to LIF dynamics, STDP math, or encoder logic shifts the output, the snapshot will break. Update the expected hashes deliberately and document the reason.
 
-**`mypy` runs in strict mode** on the `packages/` tree (excluding `experiments/`, `docs/`, `packages/web/`). All public functions require type annotations. Use `# type: ignore` only at Numba boundaries where `@njit` return types are opaque.
+**`mypy` runs in strict mode over the whole repo** — CI runs `uv run mypy .`, which checks `packages/` **and `tests/`** and everything else, excluding only `experiments/`, `docs/`, `packages/web/` (the `[tool.mypy]` exclude list). Test files are type-checked too, so a `**dict[str, object]` splat or a stale `# type: ignore` in `tests/` is a CI failure. The `uv run mypy packages/core/` command above is a fast convenience check **only** — it is not what CI enforces; always run `mypy .` before pushing. All public functions require type annotations. Use `# type: ignore` only at Numba boundaries where `@njit` return types are opaque.
 
 ---
 
@@ -206,9 +253,17 @@ uv run neuroflux-experiment analyze-significance <db> --output-dir <dir> --p-thr
 - **Package manager:** `uv` (workspace mode). All three packages are editable-installed into the shared `.venv`. Do not use `pip` directly.
 - **Linter:** `ruff` (line-length=88, rules E/F/I/UP/B). Format with `ruff format`.
 - **Type checker:** `mypy` strict. Types-PyYAML stubs included as dev dep.
-- **Testing:** `pytest` + `hypothesis` for property-based tests. Coverage target: ≥85% for `neuroflux-core`.
+- **Testing:** `pytest` + `hypothesis` for property-based tests. Coverage gate: `--cov=packages/ --cov-fail-under=85` — **85% across all of `packages/`**, not just core (enforced by `make test`/`make test-fast`).
 - **Python version:** 3.11+ (`.python-version` file pins exact version for CI).
 - **Experiment tracking:** MLflow is installed; integration not yet wired (Phase 2+).
+
+---
+
+## Continuous integration
+
+CI (`.github/workflows/ci.yml`) runs four steps, in order: `ruff format --check .` → `ruff check .` → `mypy .` → `make test-fast`. All four must pass. `make lint` covers only the middle two (see the warning under Commands).
+
+**CI only triggers on pull requests and pushes to `main`.** Feature branches (`phase-N`, etc.) never run CI on their own — a branch can sit broken indefinitely and you won't know until you open the PR. Before opening a PR, run all four gate steps locally: `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy .`, `make test-fast`.
 
 ---
 

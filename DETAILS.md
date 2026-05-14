@@ -359,4 +359,24 @@ We invite domain experts to explore the interactive demonstration, stress-test t
 
 ---
 
-*This document accompanies the NeuroFlux interactive simulator. All claims regarding SNR improvement are based on synthetic signal benchmarks and are presented as proof-of-concept results pending clinical dataset validation.*
+## 13. Phase 3 real-data validation — addendum
+
+The original §6.2 finding ("Preliminary synthetic-data results show NeuroFlux achieving ΔSNR improvements of 4–8 dB under moderate noise conditions") is historically accurate: that result was reproduced and pinned on synthetic ECG (Phase 2 regression test, ΔSNR ≥ 4 dB at 50 Hz / 10 dB input SNR / 50 epochs / τ=20 ms / seed=42, ongoing CI guarantee).
+
+A subsequent full sweep on real MIT-BIH Arrhythmia Database recordings (2,560 runs across 16 patients, completed during Phase 3) revealed that the behavior on real biomedical data is **operating-regime-dependent rather than uniformly positive**. The headline findings:
+
+1. **The SNN does not behave as a broad denoising filter on real ECG.** Mean ΔSNR is negatively correlated with input SNR: at 0 dB input the mean ΔSNR is approximately neutral; at 20 dB input the SNN actively degrades the signal by ~8 dB. The output appears to have a quality ceiling set by the network's architecture and training regime — additional clean input does not translate into a cleaner reconstruction.
+
+2. **Passive (untrained) NeuroFlux preserves R-peak landmarks perfectly** (rpeak integrity = 1.000 across all input-SNR classes), while STDP-trained NeuroFlux trades some of that landmark fidelity for improved global ΔSNR. STDP adds ~3–4 dB of amplitude-domain improvement at every input SNR class.
+
+3. **A specific operating regime hits the original 4–8 dB target on real data:** record 214 at 50 Hz flicker, 0 dB input SNR, 10 training epochs, τ=10 ms — mean ΔSNR ≈ +2.26 dB with rpeak ≈ 0.985 across five random seeds. This is pinned in `tests/datasets/test_phase3_regression.py`.
+
+4. **Five diagnostic experiments** were run to characterize the mechanism (output SNR floor measurement, untrained-baseline ablation, network-size scaling, regression pinning, SHA-256 manifest activation). Two of three original mechanistic hypotheses were rejected by direct measurement; one new hypothesis (training-noise-as-regularizer) emerged.
+
+**For the full technical analysis, including the input-SNR × epochs interaction table, per-record breakdown, convergence behavior, and revised implications for Phases 4-8, see `docs/phase3_findings.md`.**
+
+The §6.2 synthetic claim is not retracted — it remains accurate as a synthetic-data result, and the canonical configuration that produced it is locked in CI. The real-data picture is more nuanced and is best read alongside the synthetic-data result rather than as a replacement for it.
+
+---
+
+*This document accompanies the NeuroFlux interactive simulator. The original synthetic-data claims (§6.2) are pinned in CI by `tests/test_phase2_regression.py`. The Phase 3 real-data findings (§13 above) are pinned in CI by `tests/datasets/test_phase3_regression.py` (skip-if-data-missing). See `docs/phase3_findings.md` for the full Phase 3 analysis.*

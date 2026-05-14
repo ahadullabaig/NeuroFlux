@@ -1,0 +1,29 @@
+# Phase 3 — Quick Validation (CI Smoke Test)
+# Minimal config for fast sanity checks. ~4 runs total.
+#
+# Usage:
+#   uv run neuroflux-experiment run configs/phase3/quick_validation.yaml --output-db results/phase3_quick.db
+#   uv run neuroflux-experiment run configs/phase3/quick_validation.yaml --dry-run
+
+dataset: mit-bih
+
+record_ids:
+  - "100"
+  - "101"
+
+flicker_frequencies:
+  - 50.0
+
+input_snrs:
+  - 10.0
+
+training_epochs:
+  - 5
+
+stdp_taus:
+  - 20.0
+
+flicker_amplitude: 0.5
+seeds_per_config: 2
+duration_s: 5.0
+cache_dir: data/mit_bih

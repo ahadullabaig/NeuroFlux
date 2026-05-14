@@ -1,0 +1,199 @@
+{
+  "database": "mitdb",
+  "source_url": "https://physionet.org/content/mitdb/1.0.0/",
+  "description": "SHA-256 integrity manifest for the MIT-BIH Arrhythmia Database. Checksums are verified on cache hit; null means skip verification (populate after first verified download).",
+  "records": {
+    "100": {
+      "dat_checksum": "b2ea3c250e56e48f4b7b90697832b8ecd1afa1e0bb31f2dcfea4ed6e1075a639",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/100"
+    },
+    "101": {
+      "dat_checksum": "698d1ea6f472d23ca50317c72c96cda2698badd8578220ed0380cdf241e39006",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/101"
+    },
+    "102": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/102"
+    },
+    "103": {
+      "dat_checksum": "f7994f0bd196730779998b4bddf26cb47f396599fb370a08b5cb29a3ac4d555d",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/103"
+    },
+    "104": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/104"
+    },
+    "105": {
+      "dat_checksum": "fcd0153dfea69c749194bb73de7db124588857cfa2f6aecb72754894c8afde02",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/105"
+    },
+    "106": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/106"
+    },
+    "107": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/107"
+    },
+    "108": {
+      "dat_checksum": "229a4ef62679dc5c6ea781bfbaec2bd784151fc9f9517f4cdecd533a9431eb20",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/108"
+    },
+    "109": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/109"
+    },
+    "111": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/111"
+    },
+    "112": {
+      "dat_checksum": "3c7af9758687314255b5d946a58d9509d53ecf2a300230684fa8ecf00b774bdb",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/112"
+    },
+    "113": {
+      "dat_checksum": "f5509b71dabaaa11c53f687ee17aab0071bce3d471e2ab77c71a6434f5b7aacf",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/113"
+    },
+    "114": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/114"
+    },
+    "115": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/115"
+    },
+    "116": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/116"
+    },
+    "117": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/117"
+    },
+    "118": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/118"
+    },
+    "119": {
+      "dat_checksum": "02a286a28e69b441568add915f16a2856b22bab893bf8729ee9654411ed3a5aa",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/119"
+    },
+    "121": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/121"
+    },
+    "122": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/122"
+    },
+    "123": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/123"
+    },
+    "124": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/124"
+    },
+    "200": {
+      "dat_checksum": "a9e203b3807b9fcd3647cde03444437cb8eec7f5128a8eb413edafb394272e0f",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/200"
+    },
+    "201": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/201"
+    },
+    "202": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/202"
+    },
+    "203": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/203"
+    },
+    "205": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/205"
+    },
+    "207": {
+      "dat_checksum": "139f99250366fbf347cba4d8ea1fbe788f98cb1b93b70f50ccba70122d908605",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/207"
+    },
+    "208": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/208"
+    },
+    "209": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/209"
+    },
+    "210": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/210"
+    },
+    "212": {
+      "dat_checksum": "6b63d3e20c40073be852e8121196d5de2ede502168fcb6c10ca5af841418cc5c",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/212"
+    },
+    "213": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/213"
+    },
+    "214": {
+      "dat_checksum": "a886b1ceb56e950858dedf5b56d3fdb5f26aef3667f8effcb880c1c000ee0cd3",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/214"
+    },
+    "215": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/215"
+    },
+    "217": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/217"
+    },
+    "219": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/219"
+    },
+    "220": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/220"
+    },
+    "221": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/221"
+    },
+    "222": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/222"
+    },
+    "223": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/223"
+    },
+    "228": {
+      "dat_checksum": "b2421f15447772bb7a38f5073e4e07d5d9be50d875441a4a0821c9e22b78fdac",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/228"
+    },
+    "230": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/230"
+    },
+    "231": {
+      "dat_checksum": "7d4f56d6c4b1d50322154381c1d8761457c2f2696973e915a3c19d8a5b789595",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/231"
+    },
+    "232": {
+      "dat_checksum": "3d74a21f848766c9607bc5eead7e4b2655f09586adb5561f02fd8fcb0e9da6d0",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/232"
+    },
+    "233": {
+      "dat_checksum": null,
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/233"
+    },
+    "234": {
+      "dat_checksum": "89f826307bfc91a554021da87c17b88b843ed3d26aa9ea237fc6f7c8af00da6d",
+      "source_url": "https://physionet.org/content/mitdb/1.0.0/234"
+    }
+  }
+}

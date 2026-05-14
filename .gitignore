@@ -131,5 +131,8 @@ node_modules/
 # Experiments
 mlruns/
 
+# Downloaded datasets (cached locally, not committed)
+data/
+
 #claude code config
 .claude/

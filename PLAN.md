@@ -295,7 +295,16 @@ Real signals do not come with clean references. Two approaches, used together:
 
 - At least one real dataset integrated end-to-end.
 - Reproducible results from raw dataset download to final metric (one-command pipeline).
-- Performance on at least one dataset shows meaningful improvement over noisy input (ΔSNR ≥ 3 dB or qualitative artifact reduction confirmed by clinician).
+- Performance on at least one dataset shows meaningful improvement over noisy input (ΔSNR ≥ 3 dB **or** qualitative artifact reduction confirmed by clinician **or** R-peak preservation ≥ 0.85 in at least one input-SNR regime).
+
+### Outcome (post-Phase-3-sweep update)
+
+Phase 3 completed with a regime-characterization result rather than the originally-anticipated absolute-improvement result. See `docs/phase3_findings.md` for full analysis. Summary:
+
+- **Acceptance criterion met conditionally:** record 214 with the canonical config (50 Hz flicker, 0 dB input SNR, 10 epochs, τ=10 ms) achieves ΔSNR ≈ +2.26 dB and R-peak integrity ≈ 0.985. Pinned in `tests/datasets/test_phase3_regression.py`.
+- **Operating regime:** the SNN improves ΔSNR at low input SNR (≤ 0 dB) and degrades it at high input SNR (≥ 5 dB). The passive (untrained) configuration preserves R-peaks perfectly at every input SNR; STDP training adds 3-4 dB of ΔSNR uniformly but at the cost of R-peak fidelity (0.51-0.89).
+- **Mechanism revision:** the initial "output SNR floor at 10-12 dB set by population decoder capacity" hypothesis was **rejected** by the §5.6.1 diagnostic — direct measurement on a clean signal gives intrinsic output SNR ≈ 0.7 dB. The actual mechanism is *training-noise-as-regularizer*: STDP trained on noisy input produces a less specialized network than STDP trained on clean input, which is why the apparent "floor" tracks input SNR. This rules out the original "scale the output layer to lift the floor" Phase 6 plan; see §6.2 below for the revised approach.
+- **Phase 4-7 plans below are revised** to reflect this finding.
 
 ### Risks and mitigations
 
@@ -323,43 +332,52 @@ Real signals do not come with clean references. Two approaches, used together:
 | Stationary wavelet transform + soft thresholding | Popular in ECG denoising literature | pywavelets |
 | 1D CNN autoencoder | Deep learning baseline | PyTorch, ~10k params |
 | Identity (no filtering) | Sanity check / lower bound | Trivial |
+| **Passive NeuroFlux (epochs=0)** — *added post-Phase-3* | Ablation: what does STDP add over the SNN architecture alone? | Reuses existing CLI with `training_epochs: [0]`. See `docs/phase3_findings.md` §5.6.2. |
 
-### Evaluation protocol
+### Evaluation protocol (revised post-Phase-3)
 
 Every baseline is evaluated on the same data splits, with the same metrics, by the same evaluation script. Zero tolerance for differential advantages.
 
+**Stratification:** comparisons are reported **per input-SNR class** (0, 5, 10, 20 dB), not just globally. Phase 3 showed NeuroFlux has a regime-dependent advantage that a global comparison would hide.
+
+**Dual primary metrics:** `delta_snr` *and* `rpeak_integrity` are both primary. Reporting one without the other obscures the trade-off Phase 3 documented (STDP improves ΔSNR but damages rpeak; passive preserves rpeak perfectly but underperforms on ΔSNR). All baselines must report rpeak — especially the CNN autoencoder, since NeuroFlux's defensible-without-labels claim depends on the gap between CNN-with-labels and trained-NeuroFlux being measurable.
+
 Metrics:
-- SNR improvement (primary)
+- ΔSNR (primary, stratified by input SNR class)
+- R-peak integrity (primary; the clinical metric)
 - Mean squared error vs. clean ground truth
-- Feature preservation (R-peak amplitude for ECG, alpha power for EEG)
 - Computational cost (wall time per second of signal, memory footprint)
-- Parameter count / training data required
+- Parameter count / training data required (highlight: 0 labels for NeuroFlux/passive vs. labeled set for CNN)
 
 ### Deliverables
 
 - `neuroflux-baselines` package with all baseline implementations.
-- Unified evaluation script: `evaluate --methods all --dataset mit-bih`.
-- Comparison table (publication-ready) with all methods × all metrics × confidence intervals.
-- Plots: ROC-style curves for each method, example signals showing before/after.
-- Statistical significance tests (paired Wilcoxon signed-rank across all test subjects).
+- Unified evaluation script: `evaluate --methods all --dataset mit-bih --stratify-by input_snr`.
+- Comparison table (publication-ready) with all methods × all metrics × confidence intervals × input-SNR strata.
+- Plots: ROC-style curves for each method, example signals showing before/after, *and* a stratified bar chart (ΔSNR × input-SNR class × method).
+- Statistical significance tests (paired Wilcoxon signed-rank across all test subjects, separately per input-SNR class).
+- A "passive-vs-trained NeuroFlux" ablation section explicitly quantifying the contribution of STDP.
 
 ### Honesty requirements
 
 This phase must be ruthlessly honest. If NeuroFlux underperforms on a metric, that gets reported prominently. The goal is not to "win" against every baseline — the goal is to understand where neuromorphic processing has genuine advantages and where it does not.
 
-Likely honest findings (predicted):
-- NeuroFlux matches or beats Butterworth/LMS on SNR but lags on raw computational speed.
-- CNN autoencoder may achieve higher SNR with sufficient training data — NeuroFlux's advantage is requiring no labels.
-- Wavelet denoising may excel on transient preservation — NeuroFlux's advantage is online adaptation.
+**Likely honest findings (revised after Phase 3):**
+- At input SNR ≤ 0 dB, trained NeuroFlux likely beats Butterworth/LMS on ΔSNR; at input SNR ≥ 5 dB, classical filters likely win. The defensible NeuroFlux story is "useful in severe-noise regimes where conventional filters cannot adapt."
+- **Passive NeuroFlux is expected to beat trained NeuroFlux on rpeak preservation** (Phase 3 §5.6.2 already shows this — rpeak=1.000 untrained vs ≤0.89 trained). This is a direct ablation that quantifies STDP's net effect.
+- CNN autoencoder likely beats both NeuroFlux configurations on ΔSNR with labels available; its win shrinks substantially at low input SNR. NeuroFlux's pitch: equivalent clinical-feature preservation without any labeled data.
+- Wavelet denoising may excel on transient preservation — NeuroFlux's advantage is online adaptation and zero labeled training data.
 
 Framing these honestly strengthens the proposal rather than weakening it.
 
 ### Acceptance criteria
 
-- All six baselines implemented and tested.
-- Unified evaluation produces a single results table with statistical tests.
-- At least one scenario identified where NeuroFlux is demonstrably superior, with a clear mechanistic explanation.
-- At least one scenario identified where NeuroFlux is not superior, with honest analysis.
+- All seven baselines (including passive NeuroFlux) implemented and tested.
+- Unified evaluation produces a single stratified results table with statistical tests per input-SNR class.
+- At least one input-SNR regime identified where trained NeuroFlux is superior to classical filters, with a clear mechanistic explanation.
+- At least one input-SNR regime identified where classical filters or CNN are superior, with honest analysis.
+- The passive-vs-trained NeuroFlux ablation cleanly characterizes what STDP adds.
+- The Phase 3 regression bar (`tests/datasets/test_phase3_regression.py`) is not regressed by any Phase 4 work.
 
 ---
 
@@ -406,28 +424,30 @@ Framing these honestly strengthens the proposal rather than weakening it.
 **Duration:** 1 week
 **Goal:** Find optimal NeuroFlux configurations per signal type automatically, rather than relying on manual tuning.
 
-### Approach
+### Approach (revised post-Phase-3)
 
 Bayesian optimization over the key hyperparameters using Optuna:
 
-- Neuron τ_m
-- Firing threshold offset
-- STDP A+, A−, τ+, τ−
-- Learning rate schedule
-- Network depth and layer widths
-- Encoder firing rate range
+- `network_layers` — **primary lever**. Phase 3 §5.6.3 showed `[32, 32, 32]` outperforms the historical default `[32, 16, 8]` (+1.04 dB ΔSNR at 0 dB / 10 ep). Start the search near uniform-width architectures; avoid input width ≥ 64 without re-tuning the decoder (the `[64, 32, 64]` failure mode collapses rpeak to 0.0-0.4).
+- Encoder `max_firing_rate_hz` — controls information capacity at the input stage; not yet swept.
+- STDP A+, A−, τ+, τ− — Phase 3 §5.6.2 showed STDP creates a destructive intermediate state at 10 epochs that partially recovers by 50; tighter A−/A+ symmetry might smooth this trajectory.
+- Neuron τ_m and threshold offset
+- Population decoder smoothing time constant
 
-For each target dataset (ECG, EEG, PPG), run 100 trials with validation-set SNR improvement as the objective.
+For each target dataset (ECG, EEG, PPG), run 100 trials. **Joint objective** (revised): maximize the product of `delta_snr` *and* `rpeak_integrity` on the Phase 3 canonical regression config (record 214 / 50 Hz / 0 dB / 10 epochs). The single-metric ΔSNR objective is wrong — Phase 3 showed STDP improves ΔSNR uniformly while damaging rpeak, so optimizing on ΔSNR alone would regress clinical-feature preservation.
+
+**Hard constraint:** the optimized config must not regress the passive (untrained) network's rpeak below 0.85, and must not regress `tests/datasets/test_phase3_regression.py`.
 
 ### Deliverables
 
 - Optimized configs for each signal type, checked into the repo.
 - Per-signal-type "recipe" documentation: given a new ECG recording, use config X. Given a new EEG, use config Y.
 - Meta-analysis: which hyperparameters are stable across signal types vs. signal-specific.
+- An explicit comparison of optimized-trained vs. passive (epochs=0) configurations on rpeak, since Phase 3 showed passive achieves rpeak=1.000 — Phase 6 must demonstrate that the joint optimization can recover most of that.
 
 ### Acceptance criteria
 
-- Optimized configs outperform hand-tuned defaults by at least 0.5 dB ΔSNR on held-out test data.
+- Optimized configs outperform hand-tuned defaults by at least 0.5 dB ΔSNR on held-out test data *and* preserve rpeak ≥ 0.85 (i.e., close most of the gap to the untrained 1.000 ceiling).
 - Optimization results are reproducible (seed-controlled).
 
 ### Risks and mitigations
@@ -454,10 +474,12 @@ For each target dataset (ECG, EEG, PPG), run 100 trials with validation-set SNR 
 
 ### Paper draft
 
-Target venue: one of
-- **IEEE Transactions on Biomedical Engineering** (clinical focus)
-- **Frontiers in Neuroscience – Neuromorphic Engineering** (open access, domain-appropriate)
-- **Nature Scientific Reports** (broad readership)
+Target venue (revised post-Phase-3):
+- **Frontiers in Neuroscience – Neuromorphic Engineering** (open access, mechanism-friendly framing — preferred given the Phase 3 regime-characterization result; see `docs/phase3_findings.md` §6.3)
+- IEEE Transactions on Biomedical Engineering (clinical focus — appropriate if Phase 4 establishes a clinical superiority claim in at least one regime; currently lower probability)
+- Nature Scientific Reports (broad readership — appropriate if Phase 4 produces a clean cross-method comparison)
+
+**Headline framing (revised post-Phase-3):** not "we built a better filter," but "we characterized a regime in which biologically-inspired unsupervised reconstruction provides amplitude-domain SNR improvement at low input SNR, while passive SNN architecture alone preserves clinical R-peak landmarks with perfect fidelity. The contribution of STDP is bounded and measurable, and the regime where the trained system is preferable to the passive system is precisely characterized."
 
 Paper structure:
 1. Abstract
@@ -487,6 +509,8 @@ Paper structure:
 
 **Duration:** 3 weeks
 **Goal:** Demonstrate that NeuroFlux, validated in software, can deploy to actual neuromorphic hardware for orders-of-magnitude energy efficiency gains.
+
+**Phase 3 caveat (added post-sweep):** The energy-efficiency claim is only compelling if Phase 6 produces a configuration whose joint (ΔSNR, rpeak) performance is competitive with classical baselines in at least one regime. If Phase 6 cannot do that — i.e., if the trained NeuroFlux cannot recover most of the rpeak ceiling that the passive variant achieves — Phase 8 becomes "low-power deployment of a regime-limited algorithm," which is a weaker contribution than the original Loihi/Xylo pitch. Treat Phase 8 as **strictly contingent on Phase 6 success** and the first phase to descope under time pressure.
 
 ### Target platforms (pick one)
 

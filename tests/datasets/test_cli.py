@@ -201,6 +201,9 @@ class TestResultsDB:
             "seed",
             "delta_snr",
             "convergence_speed",
+            "dataset",
+            "record_id",
+            "rpeak_integrity",
         }
         assert columns == expected
 
