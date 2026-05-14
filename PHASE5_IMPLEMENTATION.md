@@ -133,7 +133,20 @@ executor knows what's expected to appear on a fresh clone.
 | `tests/web/` directory | Milestone A test files | no |
 | `results/*.db`, `*.log`, etc. from any ad-hoc runs | not used by Phase 5 | yes (already) |
 
-### 0.6 Two-shell layout during development
+### 0.6 Git workflow
+
+- All Phase 5 work goes on the `phase-5` branch (already checked out in §0.2).
+  CI does **not** run on this branch — feature branches are unprotected, so
+  you can push as you go without breaking anything.
+- Commit per batch (per §6 batching plan) using conventional-commit prefixes:
+  `feat(web): …`, `fix(web): …`, `docs(web): …`, `test(web): …`.
+- **Do not add `Co-Authored-By` lines** (project convention; see CLAUDE.md).
+- When all milestones A–E are merged locally and the manual golden-path
+  checklist (§7) passes, open a PR `phase-5 → main`. CI will then run the
+  full gate (ruff format/check + mypy + test-fast). Do not push to `main`
+  directly.
+
+### 0.7 Two-shell layout during development
 
 You will need two terminals open most of the time:
 
@@ -489,7 +502,10 @@ curl 'http://localhost:8000/api/records/214/segment?duration_s=10' \
     optionally STDP-train (skip training if `req.training_epochs == 0`) +
     evaluation pass.
   - Collects spikes per layer into sparse `SpikeEvent` list (cap at 5000;
-    decimate uniformly if over).
+    decimate uniformly if over). **Note:** `Simulator.run()` only retains
+    output-layer spikes — for per-layer access, drive the loop yourself via
+    `Simulator.run_step()` (returns `(decoded, layer_spikes: list[np.ndarray])`
+    every timestep). See `packages/core/src/neuroflux_core/network/simulator.py:55`.
   - Computes metrics via `calculate_snr` + `rpeak_integrity` + `mean_firing_rate`.
   - Returns the `SimulateResponse`.
 - Unit-test with a synthetic signal: assert `len(t_ms) == len(clean) ==
