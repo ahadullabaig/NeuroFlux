@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NeuroFlux — Phase 5 design mockup</title>
+<meta name="viewport" content="width=1280">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─────────────────────────── Design Tokens ─────────────────────────── */
+  :root {
+    /* Surfaces */
+    --void:        #07080D;
+    --surface-0:   #0B0E16;
+    --surface-1:   #11151F;
+    --surface-2:   #161B28;
+    --surface-3:   #1D2331;
+
+    /* Hairlines */
+    --rule:        #1A2030;
+    --rule-strong: #262D3F;
+    --rule-hot:    #3A4258;
+
+    /* Text */
+    --text-1: #E9EBF0;
+    --text-2: #8C94A8;
+    --text-3: #535B6F;
+    --text-4: #2F3447;
+
+    /* Brand accents (used WITH semantic meaning) */
+    --amber:    #FFB547;   /* noisy signal · layer 1 · interference */
+    --cyan:     #00D9C0;   /* reconstructed · layer 2 · positive Δ */
+    --magenta:  #FF6B9D;   /* negative Δ · degradation warning */
+    --bone:     #F2F0E8;   /* layer 3 · pure data */
+    --clean:    #687386;   /* clean reference trace */
+
+    /* Typography */
+    --f-display: 'Instrument Serif', 'Times New Roman', serif;
+    --f-ui:      'Inter Tight', system-ui, sans-serif;
+    --f-mono:    'JetBrains Mono', 'SF Mono', monospace;
+
+    /* Spacing scale */
+    --s1: 4px;  --s2: 8px;  --s3: 12px;  --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px;  --s8: 64px;
+
+    /* Motion */
+    --ease-out:    cubic-bezier(.22, 1, .36, 1);
+    --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--void);
+    color: var(--text-1);
+    font-family: var(--f-ui);
+    font-size: 13px;
+    line-height: 1.45;
+    letter-spacing: 0.005em;
+    overflow-x: hidden;
+    /* Subtle film grain to make the dark feel physical, not flat */
+    background-image:
+      radial-gradient(1200px 700px at 22% 18%, rgba(0,217,192,0.025), transparent 60%),
+      radial-gradient(900px 600px at 88% 92%, rgba(255,181,71,0.018), transparent 60%);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.55'/></svg>");
+    opacity: 0.4; mix-blend-mode: overlay;
+  }
+
+  /* ─────────────────────────── Layout ─────────────────────────── */
+  .app {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ── Header ── */
+  header.bar {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 320px 1fr auto;
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-0);
+    padding: 0 var(--s5);
+    height: 56px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: var(--s3);
+    padding-left: var(--s2);
+  }
+  .brand-mark {
+    width: 24px; height: 24px; border: 1px solid var(--rule-hot);
+    display: grid; place-items: center; border-radius: 3px;
+    background: var(--surface-2);
+  }
+  .brand-mark svg { display: block; }
+  .brand-word {
+    font-family: var(--f-ui);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .brand-word .flux {
+    font-family: var(--f-display);
+    font-style: italic;
+    font-weight: 400;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    font-size: 17px;
+    color: var(--cyan);
+    margin-left: 2px;
+    position: relative;
+    top: 1px;
+  }
+
+  .meta-readout {
+    justify-self: center;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+    display: flex; align-items: center; gap: var(--s4);
+  }
+  .meta-readout .dot { color: var(--text-4); }
+  .meta-readout .k { color: var(--text-3); }
+  .meta-readout .v { color: var(--text-1); }
+  .meta-readout .cursor {
+    width: 7px; height: 11px;
+    background: var(--cyan);
+    display: inline-block;
+    animation: blink 1.1s steps(1, end) infinite;
+    margin-left: 4px;
+    vertical-align: -1px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .status {
+    display: flex; align-items: center; gap: var(--s4);
+    font-family: var(--f-mono); font-size: 10.5px;
+    color: var(--text-2); letter-spacing: 0.05em;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 8px; border: 1px solid var(--rule-strong);
+    border-radius: 2px; background: var(--surface-1);
+  }
+  .pill .led {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
+  }
+  .pill.warm .led { background: var(--cyan); }
+  .pill.cold .led { background: var(--text-3); box-shadow: none; }
+  .tour-btn {
+    background: transparent; border: 1px solid var(--rule-strong);
+    color: var(--text-1); font-family: var(--f-mono); font-size: 10.5px;
+    padding: 6px 12px; cursor: pointer; letter-spacing: 0.08em;
+    transition: all 160ms var(--ease-out);
+  }
+  .tour-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* ── Sidebar (Controls) ── */
+  aside.controls {
+    border-right: 1px solid var(--rule);
+    background: var(--surface-0);
+    padding: var(--s5) var(--s5) var(--s4);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .section {
+    padding: var(--s5) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .section:first-child { padding-top: 0; }
+  .section-label {
+    font-family: var(--f-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: var(--s4);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-label .index {
+    font-family: var(--f-mono); color: var(--text-4);
+  }
+
+  /* Custom dropdown */
+  .dropdown {
+    position: relative; width: 100%;
+  }
+  .dropdown-trigger {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface-1); border: 1px solid var(--rule-strong);
+    padding: 10px var(--s3);
+    cursor: pointer; color: var(--text-1);
+    font-family: var(--f-mono); font-size: 13px;
+    transition: border-color 160ms var(--ease-out);
+  }
+  .dropdown-trigger:hover { border-color: var(--rule-hot); }
+  .dropdown-trigger .label { display: flex; align-items: baseline; gap: 8px; }
+  .dropdown-trigger .badge {
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.04em;
+  }
+  .dropdown-trigger .chev { color: var(--text-3); font-size: 10px; }
+  .dropdown-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--surface-2); border: 1px solid var(--rule-hot);
+    max-height: 240px; overflow-y: auto; z-index: 10;
+    display: none;
+  }
+  .dropdown.open .dropdown-list { display: block; }
+  .dropdown-item {
+    padding: 8px var(--s3); cursor: pointer;
+    font-family: var(--f-mono); font-size: 12px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+  }
+  .dropdown-item:hover { background: var(--surface-3); color: var(--cyan); }
+  .dropdown-item .item-badge { color: var(--text-3); font-size: 10px; }
+
+  /* Slider */
+  .slider-row {
+    margin-bottom: var(--s4);
+  }
+  .slider-row:last-child { margin-bottom: 0; }
+  .slider-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .slider-name {
+    font-size: 11.5px; color: var(--text-2);
+    letter-spacing: 0.02em;
+  }
+  .slider-name .hint {
+    color: var(--text-4); font-family: var(--f-mono); font-size: 10px;
+    margin-left: 6px;
+  }
+  .slider-value {
+    font-family: var(--f-mono); font-size: 13px; color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .slider-value .unit { color: var(--text-3); margin-left: 3px; font-size: 11px; }
+
+  .slider {
+    position: relative;
+    height: 24px;
+    cursor: pointer;
+  }
+  .slider-track {
+    position: absolute; top: 11px; left: 0; right: 0; height: 2px;
+    background: var(--surface-3);
+  }
+  .slider-fill {
+    position: absolute; top: 11px; left: 0; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(0, 217, 192, 0.4);
+  }
+  .slider-handle {
+    position: absolute; top: 6px;
+    width: 12px; height: 12px;
+    background: var(--cyan);
+    transform: translateX(-50%) rotate(45deg);
+    transition: box-shadow 160ms var(--ease-out);
+    box-shadow: 0 0 0 4px rgba(0, 217, 192, 0.08);
+  }
+  .slider:hover .slider-handle {
+    box-shadow: 0 0 0 5px rgba(0, 217, 192, 0.14);
+  }
+  .slider-ticks {
+    position: absolute; top: 16px; left: 0; right: 0; height: 4px;
+    display: flex; justify-content: space-between;
+    pointer-events: none;
+  }
+  .slider-ticks span {
+    width: 1px; height: 3px; background: var(--text-4);
+  }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: var(--surface-1); border: 1px solid var(--rule-strong);
+    position: relative; overflow: hidden;
+    height: 56px;
+  }
+  .mode-half {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer;
+    padding: 0 var(--s3);
+    position: relative; z-index: 2;
+    transition: color 200ms var(--ease-out);
+  }
+  .mode-half.active { color: var(--text-1); }
+  .mode-half:not(.active) { color: var(--text-3); }
+  .mode-half .name {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.12em;
+    font-weight: 500;
+  }
+  .mode-half .meta {
+    font-size: 9.5px; color: var(--text-3); letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+  .mode-half.active .meta { color: var(--text-2); }
+  .mode-indicator {
+    position: absolute; top: 0; left: 0; width: 50%; height: 100%;
+    background: var(--surface-3);
+    border-right: 1px solid var(--cyan);
+    transition: transform 280ms var(--ease-in-out);
+    z-index: 1;
+  }
+  .mode-toggle.right .mode-indicator {
+    transform: translateX(100%);
+    border-right: none; border-left: 1px solid var(--cyan);
+  }
+  .mode-caption {
+    margin-top: var(--s2);
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.03em;
+    height: 14px;
+  }
+  .mode-caption .accent { color: var(--cyan); }
+
+  /* Run button */
+  .run-zone { margin-top: auto; padding-top: var(--s5); }
+  .run-btn {
+    width: 100%; height: 52px;
+    background: var(--surface-2); color: var(--text-1);
+    border: 1px solid var(--rule-hot);
+    cursor: pointer;
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.16em;
+    text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: var(--s3);
+    transition: all 200ms var(--ease-out);
+    position: relative; overflow: hidden;
+  }
+  .run-btn:hover {
+    border-color: var(--cyan); color: var(--cyan);
+    box-shadow: 0 0 24px rgba(0, 217, 192, 0.18) inset;
+  }
+  .run-btn .glyph {
+    width: 0; height: 0;
+    border-left: 8px solid currentColor;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+  .run-btn.running {
+    border-color: var(--cyan); color: var(--cyan);
+  }
+  .run-btn.running .glyph {
+    border: none;
+    width: 12px; height: 12px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Main canvas ── */
+  main.canvas {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    background: var(--surface-0);
+    padding: var(--s5);
+    gap: var(--s4);
+    overflow: hidden;
+  }
+
+  .stack {
+    display: grid;
+    grid-template-rows: 1fr 200px;
+    border: 1px solid var(--rule);
+    background: var(--surface-1);
+    position: relative;
+  }
+  .stack::before {
+    /* Scanline shimmer in the plot canvas, very faint */
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 4px
+    );
+    z-index: 1;
+  }
+
+  /* ── Hero plot ── */
+  .plot-frame {
+    position: relative;
+    overflow: hidden;
+    padding: var(--s4) var(--s5) var(--s4) var(--s6);
+    border-bottom: 1px solid var(--rule);
+  }
+  .plot-title {
+    position: absolute; top: var(--s4); left: var(--s6);
+    font-family: var(--f-display);
+    font-style: italic;
+    font-size: 22px;
+    color: var(--text-1);
+    z-index: 3;
+  }
+  .plot-title .small {
+    font-family: var(--f-mono); font-style: normal;
+    font-size: 10px; color: var(--text-3);
+    letter-spacing: 0.16em; text-transform: uppercase;
+    display: block; margin-bottom: 2px;
+  }
+  .plot-legend {
+    position: absolute; top: var(--s4); right: var(--s5); z-index: 3;
+    background: rgba(11, 14, 22, 0.8);
+    border: 1px solid var(--rule);
+    padding: 10px 12px;
+    backdrop-filter: blur(6px);
+    display: flex; flex-direction: column; gap: 6px;
+    font-family: var(--f-mono); font-size: 10.5px;
+    letter-spacing: 0.04em;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .legend-item .swatch { width: 18px; height: 2px; }
+  .legend-item .swatch.dashed {
+    background-image: repeating-linear-gradient(
+      to right, currentColor 0 4px, transparent 4px 7px);
+    height: 2px;
+  }
+  .legend-item .name { color: var(--text-2); }
+  .legend-item .name.bright { color: var(--text-1); }
+  .legend-clean { color: var(--clean); }
+  .legend-noisy { color: var(--amber); }
+  .legend-reconstructed { color: var(--cyan); }
+
+  .playhead-readout {
+    position: absolute; bottom: var(--s4); right: var(--s5); z-index: 3;
+    font-family: var(--f-mono); font-size: 11px;
+    color: var(--text-2); letter-spacing: 0.03em;
+    background: rgba(11, 14, 22, 0.8);
+    border: 1px solid var(--rule);
+    padding: 6px 10px;
+    backdrop-filter: blur(6px);
+    display: none;
+  }
+  .playhead-readout.active { display: block; }
+  .playhead-readout .label { color: var(--text-3); margin-right: 4px; }
+  .playhead-readout .v { color: var(--text-1); }
+  .playhead-readout .v.cyan { color: var(--cyan); }
+  .playhead-readout .v.amber { color: var(--amber); }
+
+  .plot-svg { width: 100%; height: 100%; display: block; }
+  .grid-line { stroke: var(--rule); stroke-width: 1; }
+  .axis-tick {
+    fill: var(--text-3); font-family: var(--f-mono); font-size: 10px;
+  }
+  .axis-label {
+    fill: var(--text-3); font-family: var(--f-mono);
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .trace { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+  .trace-clean { stroke: var(--clean); stroke-width: 1.3; opacity: 0.85; }
+  .trace-noisy { stroke: var(--amber); stroke-width: 1.1; opacity: 0.55; }
+  .trace-reconstructed {
+    stroke: var(--cyan); stroke-width: 1.7;
+    filter: drop-shadow(0 0 5px rgba(0, 217, 192, 0.35));
+  }
+  .rpeak-marker { fill: var(--cyan); opacity: 0.95; }
+  .rpeak-marker-clean {
+    fill: none; stroke: var(--clean); stroke-width: 1.1;
+  }
+  .playhead {
+    stroke: var(--text-1); stroke-width: 0.8; stroke-dasharray: 2 3;
+    opacity: 0.5; display: none;
+  }
+  .playhead.active { display: block; }
+
+  /* Empty state */
+  .plot-empty {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    pointer-events: none;
+    font-family: var(--f-mono); color: var(--text-3);
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
+    z-index: 2;
+  }
+  .plot-empty .pulse {
+    display: inline-block; width: 8px; height: 8px;
+    background: var(--text-3); border-radius: 50%;
+    margin-right: 10px; animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.2; transform: scale(0.7); } }
+
+  /* ── Spike raster ── */
+  .raster-frame {
+    position: relative;
+    padding: var(--s3) var(--s5) var(--s4) var(--s6);
+  }
+  .raster-title {
+    position: absolute; top: var(--s3); left: var(--s6); z-index: 3;
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .raster-svg { width: 100%; height: 100%; display: block; }
+  .layer-label {
+    fill: var(--text-3); font-family: var(--f-mono);
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    text-anchor: end;
+  }
+  .layer-rule { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+  .spike { opacity: 0.85; }
+  .spike-l1 { fill: var(--amber); }
+  .spike-l2 { fill: var(--cyan); }
+  .spike-l3 { fill: var(--bone); }
+
+  /* ── Metrics row ── */
+  .metrics {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 1px; background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .metric {
+    background: var(--surface-1); padding: var(--s4) var(--s5);
+    display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+  }
+  .metric .lbl {
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .metric .val {
+    font-family: var(--f-mono); font-size: 28px; font-weight: 400;
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .metric .val .unit { font-size: 13px; color: var(--text-3); margin-left: 4px; }
+  .metric .val.positive { color: var(--cyan); }
+  .metric .val.negative { color: var(--magenta); }
+  .metric .sub {
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .bar-track {
+    margin-top: 6px; height: 3px; background: var(--surface-3);
+    position: relative; overflow: hidden;
+  }
+  .bar-fill {
+    position: absolute; top: 0; left: 0; height: 100%;
+    background: var(--cyan); transition: width 600ms var(--ease-out);
+    box-shadow: 0 0 6px rgba(0, 217, 192, 0.4);
+  }
+  .bar-fill.warn { background: var(--magenta); box-shadow: 0 0 6px rgba(255, 107, 157, 0.35); }
+
+  /* ── History strip ── */
+  .history {
+    display: grid; grid-template-columns: 120px repeat(5, 1fr);
+    gap: 1px; background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .history-head, .history-cell {
+    background: var(--surface-1); padding: var(--s3) var(--s4);
+  }
+  .history-head {
+    display: flex; flex-direction: column; justify-content: center;
+    font-family: var(--f-mono); font-size: 10px;
+    color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .history-head .count {
+    font-family: var(--f-mono); font-size: 18px; color: var(--text-1);
+    letter-spacing: 0; margin-top: 2px;
+  }
+  .history-cell {
+    cursor: pointer; transition: background 160ms var(--ease-out);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .history-cell:hover { background: var(--surface-2); }
+  .history-cell .time {
+    font-family: var(--f-mono); font-size: 10px; color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+  .history-cell .delta {
+    font-family: var(--f-mono); font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .history-cell .delta.pos { color: var(--cyan); }
+  .history-cell .delta.neg { color: var(--magenta); }
+  .history-cell .meta {
+    font-family: var(--f-mono); font-size: 10px; color: var(--text-3);
+    letter-spacing: 0.02em;
+  }
+  .spark { display: block; margin-top: 2px; }
+
+  /* ── Entrance choreography ── */
+  .fade-up {
+    animation: fadeUp 600ms var(--ease-out) both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeIn 500ms var(--ease-out) both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .draw-on { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); }
+  .draw-on.go { animation: drawOn 900ms var(--ease-out) forwards; }
+  @keyframes drawOn { to { stroke-dashoffset: 0; } }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--surface-0); }
+  ::-webkit-scrollbar-thumb { background: var(--surface-3); border: 2px solid var(--surface-0); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--rule-hot); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─────────── HEADER ─────────── -->
+  <header class="bar fade-in">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M1 8 Q3 8 4 4 T7 12 T10 4 T13 12 Q14 8 15 8" stroke="#00D9C0" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="brand-word">Neuro<span class="flux">flux</span></div>
+    </div>
+
+    <div class="meta-readout">
+      <span class="dot">·</span>
+      <span><span class="k">REC</span> <span class="v" id="m-rec">214</span></span>
+      <span class="dot">·</span>
+      <span><span class="k">FLICKER</span> <span class="v" id="m-flicker">50.0 Hz</span></span>
+      <span class="dot">·</span>
+      <span><span class="k">SNR<sub>in</sub></span> <span class="v" id="m-snr">+0.0 dB</span></span>
+      <span class="dot">·</span>
+      <span><span class="k">MODE</span> <span class="v" id="m-mode">TRAINED · 10ep</span></span>
+      <span class="cursor"></span>
+    </div>
+
+    <div class="status">
+      <span class="pill warm">
+        <span class="led"></span>
+        <span>NUMBA · WARM</span>
+      </span>
+      <span class="pill cold">
+        <span class="led"></span>
+        <span>API · 8000</span>
+      </span>
+      <button class="tour-btn">↘ TAKE THE TOUR</button>
+    </div>
+  </header>
+
+  <!-- ─────────── CONTROLS SIDEBAR ─────────── -->
+  <aside class="controls fade-up" style="animation-delay: 100ms">
+
+    <div class="section">
+      <div class="section-label"><span>Source</span><span class="index">01</span></div>
+      <div class="dropdown" id="dd-source">
+        <div class="dropdown-trigger">
+          <span class="label">
+            <span>214</span><span class="badge">MIT-BIH · 30 min</span>
+          </span>
+          <span class="chev">▾</span>
+        </div>
+        <div class="dropdown-list">
+          <div class="dropdown-item"><span>100</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>101</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>103</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>105</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>108</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>200</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>214</span><span class="item-badge">30 min</span></div>
+          <div class="dropdown-item"><span>234</span><span class="item-badge">30 min</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span>Noise Injection</span><span class="index">02</span></div>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <div class="slider-name">Flicker frequency <span class="hint">powerline</span></div>
+          <div class="slider-value"><span id="v-freq">50.0</span><span class="unit">Hz</span></div>
+        </div>
+        <div class="slider" data-slider="freq" data-min="0" data-max="200" data-step="1" data-value="50">
+          <div class="slider-track"></div><div class="slider-fill"></div><div class="slider-handle"></div>
+          <div class="slider-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <div class="slider-name">Amplitude</div>
+          <div class="slider-value"><span id="v-amp">0.50</span></div>
+        </div>
+        <div class="slider" data-slider="amp" data-min="0" data-max="2" data-step="0.05" data-value="0.5">
+          <div class="slider-track"></div><div class="slider-fill"></div><div class="slider-handle"></div>
+          <div class="slider-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <div class="slider-name">Input SNR</div>
+          <div class="slider-value"><span id="v-snr">+0</span><span class="unit">dB</span></div>
+        </div>
+        <div class="slider" data-slider="snr" data-min="-10" data-max="30" data-step="1" data-value="0">
+          <div class="slider-track"></div><div class="slider-fill"></div><div class="slider-handle"></div>
+          <div class="slider-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span>STDP Learning</span><span class="index">03</span></div>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <div class="slider-name">Epochs</div>
+          <div class="slider-value"><span id="v-ep">10</span></div>
+        </div>
+        <div class="slider" data-slider="ep" data-min="0" data-max="100" data-step="1" data-value="10">
+          <div class="slider-track"></div><div class="slider-fill"></div><div class="slider-handle"></div>
+          <div class="slider-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <div class="slider-name">τ <span class="hint">trace decay</span></div>
+          <div class="slider-value"><span id="v-tau">10</span><span class="unit">ms</span></div>
+        </div>
+        <div class="slider" data-slider="tau" data-min="1" data-max="100" data-step="1" data-value="10">
+          <div class="slider-track"></div><div class="slider-fill"></div><div class="slider-handle"></div>
+          <div class="slider-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span>Mode</span><span class="index">04</span></div>
+      <div class="mode-toggle right" id="mode">
+        <div class="mode-indicator"></div>
+        <div class="mode-half" data-mode="passive">
+          <div class="name">PASSIVE</div>
+          <div class="meta">0 ep · STDP off</div>
+        </div>
+        <div class="mode-half active" data-mode="trained">
+          <div class="name">TRAINED</div>
+          <div class="meta">10 ep · STDP on</div>
+        </div>
+      </div>
+      <div class="mode-caption" id="mode-caption">
+        Passive preserves R-peaks at <span class="accent">rpeak = 1.000</span>
+      </div>
+    </div>
+
+    <div class="run-zone">
+      <button class="run-btn" id="run-btn">
+        <span class="glyph"></span><span class="run-label">Run simulation</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ─────────── MAIN CANVAS ─────────── -->
+  <main class="canvas">
+
+    <div class="stack fade-up" style="animation-delay: 200ms">
+
+      <!-- Hero plot -->
+      <div class="plot-frame" id="plot-frame">
+        <div class="plot-title">
+          <span class="small">Hero Trace · time-domain reconstruction</span>
+          <span><em>Signal</em> recovered through spiking dynamics</span>
+        </div>
+
+        <div class="plot-legend">
+          <div class="legend-item"><span class="swatch legend-clean" style="background: currentColor"></span><span class="name">CLEAN ECG</span></div>
+          <div class="legend-item"><span class="swatch legend-noisy" style="background: currentColor"></span><span class="name">NOISY (50 Hz + AWGN)</span></div>
+          <div class="legend-item"><span class="swatch legend-reconstructed" style="background: currentColor"></span><span class="name bright">RECONSTRUCTED</span></div>
+          <div class="legend-item" style="margin-top:2px"><span class="swatch legend-clean" style="background: transparent; border: 1px solid currentColor; height:8px; width:8px; transform:rotate(45deg)"></span><span class="name">R-peak · clean</span></div>
+          <div class="legend-item"><span class="swatch legend-reconstructed" style="background: currentColor; height:8px; width:8px; transform:rotate(45deg)"></span><span class="name">R-peak · recovered</span></div>
+        </div>
+
+        <div class="playhead-readout" id="readout">
+          <span class="label">t</span><span class="v" id="r-t">0.00 s</span>
+          &nbsp;·&nbsp;
+          <span class="label">clean</span><span class="v" id="r-c">0.00</span>
+          &nbsp;·&nbsp;
+          <span class="label">noisy</span><span class="v amber" id="r-n">0.00</span>
+          &nbsp;·&nbsp;
+          <span class="label">recon</span><span class="v cyan" id="r-r">0.00</span>
+        </div>
+
+        <svg class="plot-svg" id="plot-svg" viewBox="0 0 1000 360" preserveAspectRatio="none">
+          <!-- Rendered by JS -->
+        </svg>
+
+        <div class="plot-empty" id="plot-empty" style="display:none">
+          <span class="pulse"></span>AWAITING SIGNAL — CONFIGURE & RUN
+        </div>
+      </div>
+
+      <!-- Spike raster -->
+      <div class="raster-frame">
+        <div class="raster-title">Spike Raster · 56 neurons · 3 layers</div>
+        <svg class="raster-svg" id="raster-svg" viewBox="0 0 1000 160" preserveAspectRatio="none">
+          <!-- Rendered by JS -->
+        </svg>
+      </div>
+    </div>
+
+    <!-- Metrics row -->
+    <div class="metrics fade-up" style="animation-delay: 350ms">
+      <div class="metric">
+        <div class="lbl">Δ SNR</div>
+        <div class="val positive" id="met-delta">+3.42<span class="unit">dB</span></div>
+        <div class="sub">improvement</div>
+      </div>
+      <div class="metric">
+        <div class="lbl">R-peak integrity</div>
+        <div class="val" id="met-rpeak">0.927</div>
+        <div class="bar-track"><div class="bar-fill" id="met-rpeak-bar" style="width: 92.7%"></div></div>
+      </div>
+      <div class="metric">
+        <div class="lbl">Output SNR</div>
+        <div class="val" id="met-out">3.42<span class="unit">dB</span></div>
+        <div class="sub">post-network</div>
+      </div>
+      <div class="metric">
+        <div class="lbl">Mean firing rate</div>
+        <div class="val" id="met-fire">23.6<span class="unit">Hz</span></div>
+        <div class="sub">across population</div>
+      </div>
+      <div class="metric">
+        <div class="lbl">Runtime</div>
+        <div class="val" id="met-rt">1.82<span class="unit">s</span></div>
+        <div class="sub">wall · 8 cores</div>
+      </div>
+    </div>
+
+    <!-- History strip -->
+    <div class="history fade-up" style="animation-delay: 450ms">
+      <div class="history-head"><span>Session</span><span class="count">04</span></div>
+      <div class="history-cell">
+        <div class="time">14:22:08</div>
+        <div class="delta pos">+3.42 dB</div>
+        <div class="meta">214 · TRAINED · 10ep</div>
+      </div>
+      <div class="history-cell">
+        <div class="time">14:20:51</div>
+        <div class="delta pos">+0.12 dB</div>
+        <div class="meta">214 · PASSIVE · 0ep</div>
+      </div>
+      <div class="history-cell">
+        <div class="time">14:17:33</div>
+        <div class="delta neg">−2.18 dB</div>
+        <div class="meta">100 · TRAINED · 50ep</div>
+      </div>
+      <div class="history-cell">
+        <div class="time">14:14:02</div>
+        <div class="delta pos">+1.91 dB</div>
+        <div class="meta">214 · TRAINED · 10ep · 5dB</div>
+      </div>
+      <div class="history-cell">
+        <div class="time">14:11:47</div>
+        <div class="delta pos">+0.04 dB</div>
+        <div class="meta">228 · PASSIVE · 0ep</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ─────────────────────────── Mock signal generators ─────────────────────────── */
+const FS = 250, DURATION = 10;
+const N = FS * DURATION;
+
+function gauss(t, mu, sigma) {
+  const z = (t - mu) / sigma;
+  return Math.exp(-0.5 * z * z);
+}
+
+function generateECG() {
+  const sig = new Float32Array(N);
+  const hr = 1.18;                       // ~70 bpm
+  const spb = FS / hr;
+  for (let i = 0; i < N; i++) {
+    const phase = (i % spb) / spb;
+    // Baseline drift
+    sig[i] = 0.04 * Math.sin(2 * Math.PI * 0.18 * i / FS);
+    // P
+    sig[i] += 0.16 * gauss(phase, 0.10, 0.025);
+    // Q
+    sig[i] -= 0.14 * gauss(phase, 0.27, 0.013);
+    // R (the headline)
+    sig[i] += 1.10 * gauss(phase, 0.30, 0.013);
+    // S
+    sig[i] -= 0.26 * gauss(phase, 0.33, 0.014);
+    // T
+    sig[i] += 0.34 * gauss(phase, 0.55, 0.045);
+  }
+  return sig;
+}
+
+function addNoise(clean, freq, amp, snrDb) {
+  // Add 50 Hz flicker + AWGN scaled to target SNR
+  const out = new Float32Array(N);
+  const signalPower = clean.reduce((a, v) => a + v * v, 0) / N;
+  const noisePowerTarget = signalPower / Math.pow(10, snrDb / 10);
+  let awgn = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    // Box-Muller
+    const u1 = Math.random() || 1e-9, u2 = Math.random();
+    awgn[i] = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+  const awgnPower = awgn.reduce((a, v) => a + v * v, 0) / N;
+  const awgnScale = Math.sqrt(Math.max(0, noisePowerTarget) / Math.max(awgnPower, 1e-9));
+  for (let i = 0; i < N; i++) {
+    const flick = amp * Math.sin(2 * Math.PI * freq * i / FS);
+    out[i] = clean[i] + flick + awgnScale * awgn[i];
+  }
+  return out;
+}
+
+function smoothSignal(sig, k) {
+  // moving average — fake the reconstruction
+  const out = new Float32Array(N);
+  let s = 0; let q = [];
+  for (let i = 0; i < N; i++) {
+    q.push(sig[i]); s += sig[i];
+    if (q.length > k) s -= q.shift();
+    out[i] = s / q.length;
+  }
+  return out;
+}
+
+function reconstruct(clean, noisy, passive) {
+  // For demo: passive ≈ heavy smoothing of noisy (loses morphology a bit but keeps R-peaks)
+  // Trained ≈ closer to clean with small residual + crisp R-peaks
+  if (passive) {
+    const sm = smoothSignal(noisy, 12);
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      out[i] = sm[i] * 0.92 + clean[i] * 0.08;
+    }
+    return out;
+  } else {
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      out[i] = clean[i] * 0.86 + (Math.random() - 0.5) * 0.06;
+    }
+    // Sharpen the R-peaks slightly
+    for (let i = 0; i < N; i++) if (clean[i] > 0.6) out[i] = clean[i] * 1.02;
+    return out;
+  }
+}
+
+function findRPeaks(sig, threshold) {
+  const peaks = [];
+  for (let i = 5; i < N - 5; i++) {
+    if (sig[i] > threshold &&
+        sig[i] > sig[i-1] && sig[i] > sig[i+1] &&
+        sig[i] > sig[i-3] && sig[i] > sig[i+3]) {
+      peaks.push(i);
+    }
+  }
+  return peaks;
+}
+
+function generateSpikes(clean, rPeaks, totalNeurons, layerSizes) {
+  // Sparse spike events. Density scales with |clean(t)|. Layer 1 (input) is most active.
+  const events = [];
+  const rateBase = [0.06, 0.04, 0.10]; // base prob per timestep, by layer
+  let neuronOffset = 0;
+  for (let l = 0; l < layerSizes.length; l++) {
+    const n = layerSizes[l];
+    for (let neuron = 0; neuron < n; neuron++) {
+      for (let i = 0; i < N; i += 1) {
+        // Each neuron fires preferentially around its preferred phase
+        const phasePref = neuron / n;
+        const phase = ((i % (FS / 1.18)) / (FS / 1.18));
+        const phaseMod = Math.exp(-Math.pow((phase - phasePref) / 0.18, 2));
+        const ampMod = Math.abs(clean[i]) * 0.7 + 0.3;
+        const prob = rateBase[l] * phaseMod * ampMod;
+        if (Math.random() < prob * 0.06) {
+          events.push({ t: i / FS, layer: l, neuron: neuronOffset + neuron });
+        }
+      }
+    }
+    neuronOffset += n;
+  }
+  // Layer 3 outputs fire at R-peaks
+  for (const p of rPeaks) {
+    for (let n = 0; n < 8; n++) {
+      if (Math.random() < 0.55) {
+        events.push({ t: p / FS, layer: 2, neuron: 48 + n });
+      }
+    }
+  }
+  return events;
+}
+
+/* ─────────────────────────── Rendering ─────────────────────────── */
+const W = 1000, H_PLOT = 360, H_RAST = 160;
+const MARGIN = { l: 36, r: 16, t: 28, b: 28 };
+const RAST_MARGIN = { l: 36, r: 50, t: 18, b: 22 };
+
+function xScale(t) {
+  return MARGIN.l + (t / DURATION) * (W - MARGIN.l - MARGIN.r);
+}
+function yScale(v, ymin, ymax) {
+  const innerH = H_PLOT - MARGIN.t - MARGIN.b;
+  return MARGIN.t + (1 - (v - ymin) / (ymax - ymin)) * innerH;
+}
+function xRaster(t) {
+  return RAST_MARGIN.l + (t / DURATION) * (W - RAST_MARGIN.l - RAST_MARGIN.r);
+}
+function yRaster(neuron, totalN) {
+  const innerH = H_RAST - RAST_MARGIN.t - RAST_MARGIN.b;
+  return RAST_MARGIN.t + (neuron / (totalN - 1)) * innerH;
+}
+
+function buildPath(sig, ymin, ymax, step) {
+  let d = '';
+  for (let i = 0; i < N; i += step) {
+    const x = xScale(i / FS).toFixed(2);
+    const y = yScale(sig[i], ymin, ymax).toFixed(2);
+    d += (i === 0 ? 'M' : 'L') + x + ' ' + y + ' ';
+  }
+  return d;
+}
+
+function renderPlot(clean, noisy, recon, rClean, rRecon, opts) {
+  const svg = document.getElementById('plot-svg');
+  svg.innerHTML = '';
+  const ymin = -0.8, ymax = 1.4;
+
+  // Grid lines
+  for (let g = 0; g <= 4; g++) {
+    const y = MARGIN.t + g * (H_PLOT - MARGIN.t - MARGIN.b) / 4;
+    svg.insertAdjacentHTML('beforeend',
+      `<line class="grid-line" x1="${MARGIN.l}" y1="${y}" x2="${W - MARGIN.r}" y2="${y}"/>`);
+  }
+  for (let g = 0; g <= 10; g++) {
+    const x = MARGIN.l + g * (W - MARGIN.l - MARGIN.r) / 10;
+    svg.insertAdjacentHTML('beforeend',
+      `<line class="grid-line" x1="${x}" y1="${MARGIN.t}" x2="${x}" y2="${H_PLOT - MARGIN.b}" opacity="0.6"/>`);
+    svg.insertAdjacentHTML('beforeend',
+      `<text class="axis-tick" x="${x}" y="${H_PLOT - 8}" text-anchor="middle">${g}.0</text>`);
+  }
+  // Y ticks
+  [1.0, 0.5, 0, -0.5].forEach(v => {
+    const y = yScale(v, ymin, ymax);
+    svg.insertAdjacentHTML('beforeend',
+      `<text class="axis-tick" x="${MARGIN.l - 6}" y="${y + 3}" text-anchor="end">${v.toFixed(1)}</text>`);
+  });
+  // Axis labels
+  svg.insertAdjacentHTML('beforeend',
+    `<text class="axis-label" x="${W - MARGIN.r}" y="${H_PLOT - 6}" text-anchor="end">TIME · S</text>`);
+  svg.insertAdjacentHTML('beforeend',
+    `<text class="axis-label" x="${MARGIN.l - 28}" y="${MARGIN.t - 8}" text-anchor="start">mV</text>`);
+
+  // Traces
+  const dClean = buildPath(clean, ymin, ymax, 2);
+  const dNoisy = buildPath(noisy, ymin, ymax, 2);
+  const dRecon = buildPath(recon, ymin, ymax, 2);
+
+  // Append with draw-on
+  const traces = [
+    ['trace-noisy', dNoisy, 0],
+    ['trace-clean', dClean, 100],
+    ['trace-reconstructed', dRecon, 250]
+  ];
+  traces.forEach(([cls, d, delay]) => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', `trace ${cls} draw-on`);
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+    const len = path.getTotalLength();
+    path.style.setProperty('--len', len);
+    setTimeout(() => path.classList.add('go'), delay);
+  });
+
+  // R-peak markers — clean (outline triangle)
+  rClean.forEach((i, idx) => {
+    const x = xScale(i / FS);
+    const y = yScale(clean[i], ymin, ymax) - 10;
+    const tri = `${x},${y} ${x-4},${y-7} ${x+4},${y-7}`;
+    svg.insertAdjacentHTML('beforeend',
+      `<polygon class="rpeak-marker-clean" points="${tri}" opacity="0" style="animation: fadeIn 200ms ${1000 + idx*20}ms forwards"/>`);
+  });
+  // R-peak markers — reconstructed (filled triangle)
+  rRecon.forEach((i, idx) => {
+    const x = xScale(i / FS);
+    const y = yScale(recon[i], ymin, ymax) - 10;
+    const tri = `${x},${y} ${x-4},${y-7} ${x+4},${y-7}`;
+    svg.insertAdjacentHTML('beforeend',
+      `<polygon class="rpeak-marker" points="${tri}" opacity="0" style="animation: fadeIn 200ms ${1100 + idx*20}ms forwards"/>`);
+  });
+
+  // Playhead line (hidden initially)
+  svg.insertAdjacentHTML('beforeend',
+    `<line class="playhead" id="playhead" x1="0" y1="${MARGIN.t}" x2="0" y2="${H_PLOT - MARGIN.b}"/>`);
+}
+
+function renderRaster(events, layerSizes) {
+  const svg = document.getElementById('raster-svg');
+  svg.innerHTML = '';
+  const total = layerSizes.reduce((a, b) => a + b, 0);
+
+  // Layer rules + labels
+  let offset = 0;
+  const layerNames = ['L1 · INPUT · 32', 'L2 · HIDDEN · 16', 'L3 · OUTPUT · 8'];
+  for (let l = 0; l < layerSizes.length; l++) {
+    offset += layerSizes[l];
+    if (l < layerSizes.length - 1) {
+      const y = yRaster(offset - 0.5, total);
+      svg.insertAdjacentHTML('beforeend',
+        `<line class="layer-rule" x1="${RAST_MARGIN.l}" y1="${y}" x2="${W - RAST_MARGIN.r}" y2="${y}"/>`);
+    }
+  }
+  // Labels (right side)
+  let runOff = 0;
+  for (let l = 0; l < layerSizes.length; l++) {
+    const center = runOff + layerSizes[l] / 2 - 0.5;
+    const y = yRaster(center, total);
+    svg.insertAdjacentHTML('beforeend',
+      `<text class="layer-label" x="${W - 6}" y="${y + 3}">${layerNames[l]}</text>`);
+    runOff += layerSizes[l];
+  }
+  // Time axis
+  for (let g = 0; g <= 10; g++) {
+    const x = RAST_MARGIN.l + g * (W - RAST_MARGIN.l - RAST_MARGIN.r) / 10;
+    svg.insertAdjacentHTML('beforeend',
+      `<line class="grid-line" x1="${x}" y1="${RAST_MARGIN.t}" x2="${x}" y2="${H_RAST - RAST_MARGIN.b}" opacity="0.3"/>`);
+  }
+
+  // Spikes
+  events.forEach((e, idx) => {
+    const x = xRaster(e.t).toFixed(2);
+    const y = yRaster(e.neuron, total).toFixed(2);
+    const cls = `spike spike-l${e.layer + 1}`;
+    const delay = 600 + (e.t / DURATION) * 700;
+    svg.insertAdjacentHTML('beforeend',
+      `<rect class="${cls}" x="${x - 1}" y="${y - 2}" width="2" height="4" opacity="0" style="animation: fadeIn 300ms ${delay}ms forwards"/>`);
+  });
+}
+
+/* ─────────────────────────── Hover playhead ─────────────────────────── */
+let currentSignals = null;
+function attachPlayhead() {
+  const frame = document.getElementById('plot-frame');
+  const readout = document.getElementById('readout');
+  frame.addEventListener('mousemove', e => {
+    if (!currentSignals) return;
+    const svg = document.getElementById('plot-svg');
+    const rect = svg.getBoundingClientRect();
+    const xPx = ((e.clientX - rect.left) / rect.width) * W;
+    if (xPx < MARGIN.l || xPx > W - MARGIN.r) { hidePlayhead(); return; }
+    const t = ((xPx - MARGIN.l) / (W - MARGIN.l - MARGIN.r)) * DURATION;
+    const idx = Math.min(N - 1, Math.max(0, Math.floor(t * FS)));
+    const ph = document.getElementById('playhead');
+    if (ph) { ph.setAttribute('x1', xPx); ph.setAttribute('x2', xPx); ph.classList.add('active'); }
+    readout.classList.add('active');
+    document.getElementById('r-t').textContent = t.toFixed(2) + ' s';
+    document.getElementById('r-c').textContent = currentSignals.clean[idx].toFixed(2);
+    document.getElementById('r-n').textContent = currentSignals.noisy[idx].toFixed(2);
+    document.getElementById('r-r').textContent = currentSignals.recon[idx].toFixed(2);
+  });
+  frame.addEventListener('mouseleave', hidePlayhead);
+}
+function hidePlayhead() {
+  const ph = document.getElementById('playhead');
+  if (ph) ph.classList.remove('active');
+  document.getElementById('readout').classList.remove('active');
+}
+
+/* ─────────────────────────── Number counting ─────────────────────────── */
+function animateNumber(el, from, to, dur, formatter) {
+  const start = performance.now();
+  function step(now) {
+    const k = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - k, 3);
+    const v = from + (to - from) * eased;
+    el.textContent = formatter(v);
+    if (k < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ─────────────────────────── Run flow ─────────────────────────── */
+let state = {
+  record: '214', freq: 50, amp: 0.5, snr: 0, ep: 10, tau: 10, mode: 'trained',
+  metrics: { delta: 3.42, rpeak: 0.927, out: 3.42, fire: 23.6, rt: 1.82 }
+};
+
+function runSimulation() {
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('running');
+  btn.querySelector('.run-label').textContent = 'Running…';
+
+  setTimeout(() => {
+    const clean = generateECG();
+    const noisy = addNoise(clean, state.freq, state.amp, state.snr);
+    const passive = state.mode === 'passive';
+    const recon = reconstruct(clean, noisy, passive);
+    const rClean = findRPeaks(clean, 0.7);
+    const rRecon = findRPeaks(recon, 0.6);
+    currentSignals = { clean, noisy, recon };
+    renderPlot(clean, noisy, recon, rClean, rRecon, {});
+    const events = generateSpikes(clean, rClean, 56, [32, 16, 8]);
+    renderRaster(events, [32, 16, 8]);
+
+    // Compute fake metrics
+    const newMetrics = passive
+      ? { delta: 0.12, rpeak: 1.000, out: 0.12, fire: 18.4, rt: 1.34 }
+      : { delta: 3.42, rpeak: 0.927, out: 3.42, fire: 23.6, rt: 1.82 };
+    const prev = state.metrics;
+    state.metrics = newMetrics;
+
+    const deltaEl = document.getElementById('met-delta');
+    deltaEl.classList.toggle('positive', newMetrics.delta >= 0);
+    deltaEl.classList.toggle('negative', newMetrics.delta < 0);
+    animateNumber(deltaEl, prev.delta, newMetrics.delta, 600,
+      v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + ' dB');
+    setTimeout(() => deltaEl.innerHTML = (newMetrics.delta >= 0 ? '+' : '−') +
+      Math.abs(newMetrics.delta).toFixed(2) + '<span class="unit">dB</span>', 620);
+
+    animateNumber(document.getElementById('met-rpeak'), prev.rpeak, newMetrics.rpeak, 600, v => v.toFixed(3));
+    document.getElementById('met-rpeak-bar').style.width = (newMetrics.rpeak * 100).toFixed(1) + '%';
+
+    const outEl = document.getElementById('met-out');
+    animateNumber(outEl, prev.out, newMetrics.out, 600,
+      v => v.toFixed(2) + ' dB');
+    setTimeout(() => outEl.innerHTML = newMetrics.out.toFixed(2) + '<span class="unit">dB</span>', 620);
+
+    const fireEl = document.getElementById('met-fire');
+    animateNumber(fireEl, prev.fire, newMetrics.fire, 600, v => v.toFixed(1) + ' Hz');
+    setTimeout(() => fireEl.innerHTML = newMetrics.fire.toFixed(1) + '<span class="unit">Hz</span>', 620);
+
+    const rtEl = document.getElementById('met-rt');
+    animateNumber(rtEl, prev.rt, newMetrics.rt, 600, v => v.toFixed(2) + ' s');
+    setTimeout(() => rtEl.innerHTML = newMetrics.rt.toFixed(2) + '<span class="unit">s</span>', 620);
+
+    btn.classList.remove('running');
+    btn.querySelector('.run-label').textContent = 'Run again';
+  }, 600);
+}
+
+/* ─────────────────────────── Slider behavior ─────────────────────────── */
+function initSliders() {
+  document.querySelectorAll('.slider').forEach(s => {
+    const min = +s.dataset.min, max = +s.dataset.max, step = +s.dataset.step;
+    let value = +s.dataset.value;
+    const fill = s.querySelector('.slider-fill');
+    const handle = s.querySelector('.slider-handle');
+    const key = s.dataset.slider;
+    const update = () => {
+      const pct = (value - min) / (max - min);
+      fill.style.width = (pct * 100) + '%';
+      handle.style.left = (pct * 100) + '%';
+      state[key] = value;
+      const fmt = {
+        freq: v => v.toFixed(1),
+        amp: v => v.toFixed(2),
+        snr: v => (v >= 0 ? '+' : '') + v.toFixed(0),
+        ep: v => v.toFixed(0),
+        tau: v => v.toFixed(0),
+      };
+      const valEl = document.getElementById('v-' + key);
+      if (valEl && fmt[key]) valEl.textContent = fmt[key](value);
+      // Update meta-readout
+      document.getElementById('m-flicker').textContent = state.freq.toFixed(1) + ' Hz';
+      document.getElementById('m-snr').textContent = (state.snr >= 0 ? '+' : '') + state.snr.toFixed(1) + ' dB';
+    };
+    update();
+    let dragging = false;
+    const setFromEvent = e => {
+      const rect = s.getBoundingClientRect();
+      let pct = (e.clientX - rect.left) / rect.width;
+      pct = Math.max(0, Math.min(1, pct));
+      value = min + Math.round((pct * (max - min)) / step) * step;
+      update();
+    };
+    s.addEventListener('mousedown', e => { dragging = true; setFromEvent(e); });
+    window.addEventListener('mousemove', e => { if (dragging) setFromEvent(e); });
+    window.addEventListener('mouseup', () => { dragging = false; });
+  });
+}
+
+/* ─────────────────────────── Mode toggle ─────────────────────────── */
+function initMode() {
+  const toggle = document.getElementById('mode');
+  const caption = document.getElementById('mode-caption');
+  toggle.querySelectorAll('.mode-half').forEach(h => {
+    h.addEventListener('click', () => {
+      const m = h.dataset.mode;
+      state.mode = m;
+      toggle.classList.toggle('right', m === 'trained');
+      toggle.querySelectorAll('.mode-half').forEach(x => x.classList.toggle('active', x === h));
+      caption.innerHTML = m === 'passive'
+        ? 'Passive preserves R-peaks at <span class="accent">rpeak = 1.000</span>'
+        : 'Trained adds <span class="accent">+3.4 dB ΔSNR</span> · rpeak ≈ 0.93';
+      document.getElementById('m-mode').textContent = m === 'trained' ? 'TRAINED · 10ep' : 'PASSIVE · 0ep';
+    });
+  });
+}
+
+/* ─────────────────────────── Dropdown ─────────────────────────── */
+function initDropdown() {
+  const dd = document.getElementById('dd-source');
+  dd.querySelector('.dropdown-trigger').addEventListener('click', () => dd.classList.toggle('open'));
+  dd.querySelectorAll('.dropdown-item').forEach(it => {
+    it.addEventListener('click', () => {
+      const r = it.firstElementChild.textContent;
+      state.record = r;
+      dd.querySelector('.dropdown-trigger .label span').textContent = r;
+      document.getElementById('m-rec').textContent = r;
+      dd.classList.remove('open');
+    });
+  });
+  document.addEventListener('click', e => {
+    if (!dd.contains(e.target)) dd.classList.remove('open');
+  });
+}
+
+/* ─────────────────────────── Init ─────────────────────────── */
+initSliders();
+initMode();
+initDropdown();
+attachPlayhead();
+document.getElementById('run-btn').addEventListener('click', runSimulation);
+
+// Auto-run once on load so the visitor sees the demo immediately
+setTimeout(runSimulation, 600);
+</script>
+
+</body>
+</html>

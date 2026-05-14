@@ -9,9 +9,12 @@ task ordering has been justified here so the executor doesn't re-litigate.
 whose environment was already set up; §0 reconstructs that environment from a
 fresh clone.
 
-> Companion docs: `PLAN.md` §Phase 5 (lines 384-419) for the original spec,
-> `docs/phase3_findings.md` for the science the dashboard is showcasing,
-> `CLAUDE.md` for repo conventions.
+> Companion docs:
+> - `packages/web/design/DESIGN.md` — **visual design system + token reference. Read this before any UI code.**
+> - `packages/web/design/mockup.html` — interactive proof-of-design; open in a browser to see what you're building.
+> - `PLAN.md` §Phase 5 (lines 384-419) for the original spec.
+> - `docs/phase3_findings.md` for the science the dashboard is showcasing.
+> - `CLAUDE.md` for repo conventions.
 
 ---
 
@@ -232,9 +235,12 @@ Fidelity wins.
 | Python deps | uv workspace | Existing tooling |
 | Frontend bundler | Vite | Fast dev server, well-trodden React+TS template |
 | UI library | React 18 + TypeScript | Conventional, hiring market, large ecosystem |
-| Styling | Tailwind CSS **v3.4** (pin — v4 is a different config model) | Fast to build polished UI without a design system |
+| Styling | Tailwind CSS **v3.4** (pin — v4 is a different config model) | Tokens wired in via `tailwind.config.ts` (see `packages/web/design/DESIGN.md` §8) |
 | State | Zustand | Hooks-based, no boilerplate, scales to v1.x without rewrite |
-| Charting | **Plotly.js** (`react-plotly.js`) | Built-in zoom/pan/export, handles 2.5k-point line plots and event markers cleanly. Heavier than uPlot but acceptable for a 10 s demo |
+| Charting | **Raw SVG + small TS helpers — NO chart library** | See `DESIGN.md` §9. Plotly's defaults contradict the "instrument" aesthetic; restyling it costs more than building plot + raster from scratch (~200 lines each, proven in `mockup.html`). |
+| Component primitives | **Radix UI** (`@radix-ui/react-slider`, `-select`, `-toggle-group`, `-tooltip`, `-dialog`) | Headless behavior + accessibility, styled from scratch per the design. **Do NOT install shadcn/ui** — its defaults fight the design language. |
+| Motion | **Framer Motion** (`framer-motion`) | For counting-number tweens and state transitions. The trace draw-on is a pure CSS keyframe (no library needed). |
+| Fonts | **Instrument Serif** (display, italic only), **Inter Tight** (UI), **JetBrains Mono** (numerics) — all Google Fonts | Committed in `DESIGN.md` §2 |
 | HTTP client | Native `fetch` | One dependency less |
 | Package manager (frontend) | **npm** (pin — keep tooling assumptions simple) | |
 | E2E test | Playwright | Modern, easy local + CI usage |
@@ -581,24 +587,39 @@ make test-fast                 # ensure no regressions to existing tests
 
 ---
 
-#### B2 — Tailwind v3.4 + design tokens &nbsp; [E]
+#### B2 — Tailwind v3.4 + design tokens from DESIGN.md &nbsp; [E]
 **Sub-steps:** 1
 - `npm i -D tailwindcss@3.4 postcss autoprefixer`
 - `npx tailwindcss init -p`
-- `tailwind.config.ts` content paths: `./index.html`, `./src/**/*.{ts,tsx}`.
-- `src/styles/index.css` adds `@tailwind base; @tailwind components; @tailwind
-  utilities;` — import in `main.tsx`.
-- Pick a small palette (neutrals + one accent — e.g. slate + indigo) and
-  document in a `theme` block in `tailwind.config.ts`.
-- Verify by adding `className="text-indigo-600"` to a heading in `App.tsx`.
+- **Copy `tailwind.config.ts` directly from `packages/web/design/DESIGN.md`
+  §8.** All color tokens (`void`, `surface.0-3`, `rule[.strong|.hot]`,
+  `ink.1-4`, `signal.*`, `accent.*`), font families, easings, and shadows
+  are spec'd there. Do NOT invent your own palette.
+- Add Google Fonts links to `index.html` for Instrument Serif (italic),
+  Inter Tight (300–700), JetBrains Mono (300–600). Copy the `<link>` tag
+  pattern from the `<head>` of `packages/web/design/mockup.html`.
+- `src/styles/index.css`:
+  ```css
+  @tailwind base; @tailwind components; @tailwind utilities;
+  @layer base { body { @apply font-ui bg-void text-ink-1; } }
+  ```
+  Import in `main.tsx`.
+- Verify with the brand-mark in the header: `<span className="font-ui font-semibold tracking-[0.18em] uppercase text-[13px]">Neuro<span className="font-display italic text-[17px] text-accent-cyan normal-case tracking-normal">flux</span></span>` (see DESIGN.md §7.1).
 
 ---
 
 #### B3 — Layout shell &nbsp; [E]
 **Sub-steps:** 1
-- `components/Layout.tsx`: header (project name + GitHub link), left controls
-  sidebar (320 px fixed), main content area (flex column), footer.
+- `components/Layout.tsx`: implement the grid from DESIGN.md §6.
+  - `grid-cols-[320px_1fr] grid-rows-[56px_1fr] h-screen`.
+  - Header bar (56px) with brand left, meta-readout center, status pills + tour button right.
+  - Left sidebar = `<aside>` for controls panel (320px).
+  - Main canvas = `<main>` with `grid-rows-[1fr_auto_auto] gap-4 p-6`.
+  - Add the SVG-noise grain overlay (`body::before` pattern in mockup.html).
 - Replace `App.tsx` body with `<Layout>...</Layout>`.
+
+**Acceptance:** Compare side-by-side with `mockup.html` — header sizes,
+sidebar width, gap between cards should match within 4px.
 
 ---
 
@@ -656,69 +677,108 @@ cd packages/web/frontend && npm run build && npm run dev
 #### C1 — Controls panel &nbsp; [M]
 **Sub-steps:** 2
 
-**C1.1 — Static layout + form inputs**
+**C1.1 — Custom slider + section primitives**
+- Build a `<Slider>` component wrapping `@radix-ui/react-slider`, styled
+  per DESIGN.md §7.5: 2px track, glowing cyan fill, 12px diamond handle
+  (rotated 45deg), 5 tick marks below, slider-head row with mono value
+  + unit. Do NOT use the Radix default styles — strip them entirely
+  (`[&_[data-orientation]]:bg-transparent` etc.) and rebuild.
+- Build `<Section>` wrapper: section-label small caps + mono index number
+  on the right; bordered with `border-b border-rule` between sections.
+- Build `<Dropdown>` (Radix Select styled per §7.6) with mono record IDs and
+  badge text.
+
+**C1.2 — Compose ControlsPanel + mode toggle + run button**
 - `ControlsPanel.tsx`:
-  - Source selector: radio "MIT-BIH record" / "Uploaded CSV".
-  - Record dropdown (populated by `listRecords()`).
-  - Sliders for: flicker freq (0–200 Hz, step 1), flicker amplitude
-    (0–2, step 0.05), input SNR (-10–30 dB, step 1), epochs (0–100, step 1),
-    STDP τ (1–100 ms, step 1).
-  - Passive/trained toggle (sets epochs to 0 vs. user-selected value; restores
-    on un-toggle).
-  - Run button (disabled while `status === 'running'`).
-- Two-way bind to Zustand store.
+  - Section 01 SOURCE: dropdown + (later in D3) upload tab.
+  - Section 02 NOISE INJECTION: three sliders (flicker freq, amplitude, input SNR).
+  - Section 03 STDP LEARNING: two sliders (epochs, τ).
+  - Section 04 MODE: passive/trained toggle (§7.7) with the dynamic caption
+    citing `rpeak = 1.000` for passive. Toggling preserves the user's epoch
+    setting (store sets `epochs = 0` while in passive mode, restores on
+    un-toggle).
+  - Run button (§7.8) at the bottom with `marginTop: auto`.
+- Two-way bind to Zustand store. Tooltip text on slider names: lift from
+  `CLAUDE.md` (e.g. τ = "trace decay constant, controls STDP plasticity
+  window").
+- Disable Run if no source is set; keyboard-accessible (Radix handles ARIA).
 
-**C1.2 — Validation + UX polish**
-- Disable Run if no record selected AND no CSV uploaded.
-- Show inline tooltip on each slider explaining the parameter (lifted from
-  `CLAUDE.md` and `docs/phase3_findings.md`).
-- Keyboard-accessible (Tab order, Enter triggers Run).
-
-**Acceptance:** Adjust sliders, click Run — store dispatches `runSimulation()`
-(stub it for now to log to console).
+**Acceptance:** Adjust sliders, click Run — store dispatches
+`runSimulation()` (stub it for now). Toggle passive ↔ trained — caption
+text updates, indicator slides 280ms ease-in-out, meta-readout in header
+updates to show the new mode.
 
 ---
 
 #### C2 — Signal plot with R-peak overlay &nbsp; [H]
-**Sub-steps:** 3
+**Sub-steps:** 4. Build from raw SVG per DESIGN.md §7.9 — no Plotly. The
+mockup's `<svg id="plot-svg">` rendering in `mockup.html` is the reference
+implementation; port it to React/TS.
 
-**C2.1 — Plotly wrapper + base traces**
-- `npm i react-plotly.js plotly.js-basic-dist-min`
-- `components/SignalPlot.tsx`: renders three line traces (clean, noisy,
-  reconstructed). Time axis in seconds (convert `t_ms / 1000`). Y-axis
-  "Amplitude (mV)".
-- Trace colors: clean = neutral grey, noisy = orange, reconstructed = indigo.
-  Toggle visibility via Plotly's built-in legend.
+**C2.1 — Scale helpers + grid**
+- `src/components/plot/scales.ts`: `xScale(t, duration, width, margin)`,
+  `yScale(v, ymin, ymax, height, margin)`, `buildPath(samples, fs, step)`.
+- `<SignalPlot>` component skeleton: takes typed props
+  `{ tMs: number[], clean: number[], noisy: number[], reconstructed: number[],
+  rpeaksCleanMs: number[], rpeaksReconstructedMs: number[] }`.
+- Renders the bordered card (`border border-rule bg-surface-1`), the plot
+  caption (mono small-caps line + Instrument Serif italic line), and the
+  hairline grid (4 horizontal + 10 vertical lines in `stroke-rule`).
+- Use `useResizeObserver` for responsive width; height fixed.
 
-**C2.2 — R-peak markers**
-- Add two scatter traces: `rpeaks_clean_ms` and `rpeaks_reconstructed_ms`,
-  rendered as upward triangles at amplitude = local maximum of their
-  respective signal. Distinct shape between clean (filled triangle) and
-  reconstructed (open triangle).
+**C2.2 — Traces with draw-on animation**
+- Render three `<path>` elements with classes mapped to design tokens:
+  `stroke-signal-noisy stroke-[1.1]`, `stroke-signal-clean stroke-[1.3]`,
+  `stroke-signal-reconstructed stroke-[1.7] [filter:drop-shadow(0_0_5px_rgba(0,217,192,0.35))]`.
+- Animate stroke-dashoffset from pathLength → 0 (900ms cubic-bezier
+  `.22,1,.36,1`) staggered by 0/100/250ms (noisy / clean / reconstructed).
+  Reconstructed last so it lands on top.
+- Use `useRef` to grab `path.getTotalLength()` after mount; set the
+  `--len` CSS variable.
 
-**C2.3 — Empty / loading / error states**
-- When `status === 'idle'` → show "Configure parameters and click Run".
-- When `status === 'running'` → show spinner + "Running simulation...".
-- When `status === 'error'` → show error message in red callout.
-- When response present → render plot.
+**C2.3 — R-peak markers + playhead + empty/loading/error states**
+- R-peak markers per §7.9: clean = outlined triangle (`fill none stroke-clean`),
+  reconstructed = filled cyan triangle. Render AFTER traces complete
+  (animation-delay matched to trace draw duration), fade-in scale-bounce.
+- Hover playhead: track mouse `clientX` in the plot frame; render a vertical
+  dashed line + glassmorphism readout in the top-right showing t / clean /
+  noisy / recon values at the cursor index (use mono with the per-trace
+  color for each value).
+- Empty state: when `response === null && status === 'idle'`, overlay
+  "AWAITING SIGNAL — CONFIGURE & RUN" centered, with a pulsing 8px dot.
+- Loading: pulsing dot + "RUNNING…" overlay.
+- Error: magenta callout (NOT red) in the top of the card.
 
-**C2.4 — Performance + responsiveness**
-- Pass `useResizeHandler` to Plotly so the plot reflows on window resize.
-- Subsample to 2500 points client-side if response signal exceeds that
-  (backend should already cap, but defend-in-depth).
-- Confirm interaction (zoom, pan, hover) is smooth on a 2500-point trace.
+**C2.4 — Legend overlay + scanline + performance check**
+- Legend: glassmorphism panel top-right (per §7.9), one line per trace +
+  one line per R-peak style. Use `backdrop-filter: blur(6px)` + 80% opacity
+  background.
+- Add the faint scanline overlay (`::before` with repeating-linear-gradient
+  at `rgba(255,255,255,0.012)` per §7.9).
+- Performance: subsample to 2500 points client-side if `clean.length > 2500`
+  (backend caps but defend in depth). Verify hover playhead is smooth (no
+  lag on 2500-point traces).
 
-**Acceptance:** End-to-end: pick record 214, input SNR=0, epochs=10, click
-Run; plot renders within 3 s with clean/noisy/reconstructed traces and R-peak
-markers. No console errors.
+**Acceptance:** End-to-end against the running backend: pick record 214,
+input SNR=0, epochs=10, click Run; within 3s the plot renders three traces
+with the draw-on animation, R-peak markers appear after, the legend overlay
+shows, hover reveals the playhead readout. Compare side-by-side with
+`mockup.html` — colors, stroke widths, and animation timing should match.
+No console errors.
 
 ---
 
-#### C3 — Metrics display &nbsp; [E]
+#### C3 — Metrics row &nbsp; [E]
 **Sub-steps:** 1
-- `MetricsPanel.tsx`: card grid with input SNR, output SNR, ΔSNR (color-coded:
-  green if > 0, red if < 0), rpeak\_integrity (color-coded: green ≥ 0.85,
-  amber 0.7–0.85, red < 0.7), mean firing rate (Hz), runtime (ms).
+- `MetricsPanel.tsx` per DESIGN.md §7.11: 5 cells with 1px gap on
+  `bg-rule` (the hairline-via-gap trick).
+- Per cell: mono small-caps label, huge mono number (28px) with unit in
+  `ink-3`, sub-line or progress bar below.
+- **Colour rules (DO NOT deviate):** ΔSNR cell uses `accent-cyan` if
+  positive, `accent-magenta` if negative. **Never red, never green.**
+  rpeak cell has a 3px progress bar (cyan if ≥0.85, magenta if below).
+- Numbers count up from previous value via Framer Motion `animate` on a
+  state value over 600ms cubic ease-out.
 - Show "—" when no response.
 
 ---
@@ -748,17 +808,26 @@ This is the v1 minimum-viable demo. Everything beyond is enhancement.
 ### Milestone D — Enhancements
 
 #### D1 — Spike raster &nbsp; [M]
-**Sub-steps:** 2
+**Sub-steps:** 2. Built per DESIGN.md §7.10 — raw SVG, NO Plotly. Reference
+`<svg id="raster-svg">` rendering in `mockup.html`.
 
 **D1.1 — Component**
-- `components/SpikeRaster.tsx`: Plotly scatter, x = `t_ms / 1000` (seconds),
-  y = `layer * 100 + neuron` (offset per layer so layers are visually
-  separated). Marker = `square`, size 4, colour by layer.
-- Y-axis tick labels show layer names.
+- `components/SpikeRaster.tsx`: 200px tall SVG canvas sharing the same x-axis
+  as `SignalPlot`. Takes `events: { tMs, layer, neuron }[]` and
+  `layerSizes: number[]` (default `[32, 16, 8]`).
+- Render hairline rules between layers (`stroke-rule stroke-[1] stroke-dasharray="2 4"`).
+- Each spike: 2×4px vertical rect, color by layer:
+  L1 → `fill-accent-amber`, L2 → `fill-accent-cyan`, L3 → `fill-accent-bone`.
+- Layer labels on RIGHT edge in mono small caps (`L1 · INPUT · 32`, etc.).
+- Spikes fade in staggered by `t` position (later spikes appear later — the
+  raster looks like it's being scanned out). 300ms fade-in with delay
+  `600 + (t/duration)*700` ms per event.
 
-**D1.2 — Layout integration**
-- Place below `SignalPlot` in a collapsible card (default open).
-- Empty/loading/error states like C2.3.
+**D1.2 — Stack integration**
+- Sit BELOW `SignalPlot` inside the SAME bordered card (per DESIGN.md §6
+  layout — they share one container with a hairline `border-t border-rule`
+  between them so the time-axis alignment is visually obvious).
+- Empty/loading/error states match C2.3 of SignalPlot.
 
 ---
 
