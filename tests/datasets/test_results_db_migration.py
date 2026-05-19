@@ -106,7 +106,7 @@ class TestResultsDBMigration:
         assert row[2] == 0.95
 
     def test_fresh_db_has_all_columns(self, tmp_path: Path) -> None:
-        """A brand-new database has all 11 columns from the start."""
+        """A brand-new database has all 13 columns from the start."""
         db = ResultsDB(tmp_path / "fresh.db")
 
         cursor = db.conn.execute("PRAGMA table_info(runs)")
@@ -125,6 +125,7 @@ class TestResultsDBMigration:
             "dataset",
             "record_id",
             "rpeak_integrity",
+            "method",
         }
         assert columns == expected
 

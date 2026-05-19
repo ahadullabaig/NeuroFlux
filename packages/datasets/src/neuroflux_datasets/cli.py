@@ -37,12 +37,18 @@ class Phase2Config(BaseModel):
     network_layers: list[int] = Field(default_factory=lambda: [32, 16, 8])
 
 
+PhaseMethod = Literal["snn_trained", "snn_passive", "butterworth_notch", "lms"]
+
+
 class Phase3Config(BaseModel):
     """Pydantic schema for Phase 3 MIT-BIH sweep configurations."""
 
     model_config = ConfigDict(extra="forbid")
 
     dataset: Literal["mit-bih"] = "mit-bih"
+    methods: list[PhaseMethod] = Field(
+        default_factory=lambda: ["snn_trained"]  # type: ignore[arg-type]
+    )
     record_ids: list[str]
     flicker_frequencies: list[float]
     input_snrs: list[float]
@@ -68,6 +74,7 @@ class RunResult:
     dataset: str = "synthetic"
     record_id: str | None = None
     rpeak_integrity: float | None = None
+    method: str = "snn_trained"
 
 
 class ResultsDB:
@@ -95,17 +102,19 @@ class ResultsDB:
                     convergence_speed INTEGER,
                     dataset TEXT DEFAULT 'synthetic',
                     record_id TEXT,
-                    rpeak_integrity REAL
+                    rpeak_integrity REAL,
+                    method TEXT DEFAULT 'snn_trained'
                 )
             """)
 
     def _migrate(self) -> None:
-        """Add missing columns to an existing pre-Phase-3 database.
+        """Add missing columns to an existing pre-pivot database.
 
         Uses ``PRAGMA table_info`` to detect which columns exist and
-        ``ALTER TABLE ... ADD COLUMN`` for any that are missing.  This
-        allows old 8-column ``results/full_sweep.db`` files created by
-        Phase 2 to be upgraded in place.
+        ``ALTER TABLE ... ADD COLUMN`` for any that are missing.  Idempotent
+        — re-running on an already-migrated DB is a no-op.  Existing rows
+        are backfilled with ``method = 'snn_passive'`` if ``epochs = 0``
+        else ``'snn_trained'``, since all pre-pivot rows came from SNN runs.
         """
         cursor = self.conn.execute("PRAGMA table_info(runs)")
         existing_columns = {row[1] for row in cursor.fetchall()}
@@ -120,10 +129,27 @@ class ResultsDB:
         if "rpeak_integrity" not in existing_columns:
             migrations.append("ALTER TABLE runs ADD COLUMN rpeak_integrity REAL")
 
+        method_added = "method" not in existing_columns
+        if method_added:
+            migrations.append(
+                "ALTER TABLE runs ADD COLUMN method TEXT DEFAULT 'snn_trained'"
+            )
+
         if migrations:
             with self.conn:
                 for sql in migrations:
                     self.conn.execute(sql)
+
+        if method_added:
+            # SQLite's ALTER TABLE ADD COLUMN DEFAULT applies the default to
+            # existing rows immediately, so all pre-pivot rows now read
+            # method='snn_trained'. Any pre-pivot row with epochs=0 came from
+            # a passive-SNN diagnostic run (Phase 3 §5.6.2 / diagnostic DBs)
+            # and should be relabeled. Runs once at migration time only.
+            with self.conn:
+                self.conn.execute(
+                    "UPDATE runs SET method = 'snn_passive' WHERE epochs = 0"
+                )
 
     def insert_result(self, res: RunResult) -> None:
         with self.conn:
@@ -132,8 +158,8 @@ class ResultsDB:
                 INSERT INTO runs
                 (signal_type, flicker_freq, input_snr, epochs,
                  stdp_tau, seed, delta_snr, convergence_speed,
-                 dataset, record_id, rpeak_integrity)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 dataset, record_id, rpeak_integrity, method)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     res.signal_type,
@@ -147,6 +173,7 @@ class ResultsDB:
                     res.dataset,
                     res.record_id,
                     res.rpeak_integrity,
+                    res.method,
                 ),
             )
 
@@ -236,8 +263,61 @@ def _resolve_signal(params: dict[str, Any], fs: float) -> tuple[np.ndarray, np.n
     )
 
 
+def _run_baseline_experiment(params: dict[str, Any], method: str) -> RunResult:
+    """Run a classical baseline filter (Butterworth notch or LMS).
+
+    Reuses :func:`_resolve_signal` so the (clean, noisy) pair is byte-identical
+    to the SNN path under the same seed.  Computes the same ``delta_snr`` and
+    (on the mit-bih branch) ``rpeak_integrity`` metrics used elsewhere, so
+    rows from all four methods share one matrix.
+    """
+    fs = 250.0
+    clean, noisy = _resolve_signal(params, fs)
+    base_snr = calculate_snr(clean, noisy)
+
+    if method == "butterworth_notch":
+        from neuroflux_baselines import butterworth_notch  # noqa: PLC0415
+
+        denoised = butterworth_notch(noisy, params["flicker_freq"], fs)
+    elif method == "lms":
+        from neuroflux_baselines import lms  # noqa: PLC0415
+
+        denoised = lms(noisy)
+    else:  # pragma: no cover — guarded by dispatch
+        raise ValueError(f"Unknown baseline method: {method}")
+
+    delta_snr = calculate_snr(clean, denoised) - base_snr
+    dataset = params.get("dataset", "synthetic")
+
+    rpeak_score: float | None = None
+    if dataset == "mit-bih":
+        from neuroflux_core.metrics.rpeak import rpeak_integrity  # noqa: PLC0415
+
+        rpeak_score = rpeak_integrity(clean, denoised, fs)
+
+    return RunResult(
+        signal_type=params["signal_type"],
+        flicker_freq=params["flicker_freq"],
+        input_snr=params["input_snr"],
+        epochs=params["epochs"],
+        stdp_tau=params["stdp_tau"],
+        seed=params["seed"],
+        delta_snr=delta_snr,
+        convergence_speed=0,
+        dataset=dataset,
+        record_id=params.get("record_id"),
+        rpeak_integrity=rpeak_score,
+        method=method,
+    )
+
+
 def run_single_experiment(params: dict[str, Any]) -> RunResult:
-    """Executes a single SNN parameter configuration."""
+    """Executes a single experiment for one method × parameter configuration."""
+    method = params.get("method", "snn_trained")
+    if method in ("butterworth_notch", "lms"):
+        return _run_baseline_experiment(params, method)
+
+    # SNN path (handles both snn_trained and snn_passive via epochs=0).
     signal_type = params["signal_type"]
     flicker_freq = params["flicker_freq"]
     input_snr = params["input_snr"]
@@ -346,6 +426,7 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
         dataset=dataset,
         record_id=record_id,
         rpeak_integrity=rpeak_score,
+        method=method,
     )
 
 
@@ -381,36 +462,54 @@ def _build_phase2_tasks(config: Phase2Config) -> list[dict[str, Any]]:
 
 
 def _build_phase3_tasks(config: Phase3Config) -> list[dict[str, Any]]:
-    """Build task dicts from a Phase 3 config (Cartesian product over records)."""
-    param_combinations = list(
-        itertools.product(
+    """Build task dicts from a Phase 3 config.
+
+    Iterates over ``config.methods`` and collapses degenerate dimensions per
+    method so non-SNN baselines aren't re-run once per (epochs, tau) cell.
+    For ``snn_passive`` the epochs dimension collapses to ``[0]`` and the
+    stdp_tau dimension collapses to a single (arbitrary) value, since neither
+    matters without STDP training.
+    """
+    tasks: list[dict[str, Any]] = []
+    seeds_range = range(config.seeds_per_config)
+    placeholder_tau = config.stdp_taus[0] if config.stdp_taus else 0.0
+
+    for method in config.methods:
+        if method == "snn_trained":
+            epoch_dims: list[int] = list(config.training_epochs)
+            tau_dims: list[float] = list(config.stdp_taus)
+        elif method == "snn_passive":
+            epoch_dims = [0]
+            tau_dims = [placeholder_tau]
+        else:  # butterworth_notch, lms — no SNN dims at all
+            epoch_dims = [0]
+            tau_dims = [0.0]
+
+        for params in itertools.product(
             config.record_ids,
             config.flicker_frequencies,
             config.input_snrs,
-            config.training_epochs,
-            config.stdp_taus,
-            range(config.seeds_per_config),
-        )
-    )
-
-    tasks: list[dict[str, Any]] = []
-    for params in param_combinations:
-        tasks.append(
-            {
-                "dataset": "mit-bih",
-                "signal_type": "ecg",  # for analysis.py grouping
-                "record_id": params[0],
-                "flicker_freq": params[1],
-                "input_snr": params[2],
-                "epochs": params[3],
-                "stdp_tau": params[4],
-                "seed": params[5],
-                "duration_s": config.duration_s,
-                "flicker_amplitude": config.flicker_amplitude,
-                "cache_dir": config.cache_dir,
-                "network_layers": config.network_layers,
-            }
-        )
+            epoch_dims,
+            tau_dims,
+            seeds_range,
+        ):
+            tasks.append(
+                {
+                    "dataset": "mit-bih",
+                    "signal_type": "ecg",  # for analysis.py grouping
+                    "method": method,
+                    "record_id": params[0],
+                    "flicker_freq": params[1],
+                    "input_snr": params[2],
+                    "epochs": params[3],
+                    "stdp_tau": params[4],
+                    "seed": params[5],
+                    "duration_s": config.duration_s,
+                    "flicker_amplitude": config.flicker_amplitude,
+                    "cache_dir": config.cache_dir,
+                    "network_layers": config.network_layers,
+                }
+            )
     return tasks
 
 
@@ -441,6 +540,7 @@ def run_experiment_command(args: argparse.Namespace) -> None:
 
         if dataset == "mit-bih":
             config = Phase3Config(**raw_config)
+            print(f"  Methods: {config.methods}")
             print(f"  Records: {len(config.record_ids)}")
             print(f"  Flicker frequencies: {config.flicker_frequencies}")
             print(f"  Input SNRs: {config.input_snrs}")

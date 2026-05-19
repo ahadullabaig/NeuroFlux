@@ -5,12 +5,14 @@ description = "Conventional and deep learning baseline models for NeuroFlux comp
 requires-python = ">=3.11"
 dependencies = [
     "neuroflux-core",
+    "neuroflux-datasets",
     "scipy>=1.12.0",
     "torch>=2.2.0",
 ]
 
 [tool.uv.sources]
 neuroflux-core = { workspace = true }
+neuroflux-datasets = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -1839,6 +1839,7 @@ version = "0.1.0"
 source = { editable = "packages/baselines" }
 dependencies = [
     { name = "neuroflux-core" },
+    { name = "neuroflux-datasets" },
     { name = "scipy" },
     { name = "torch" },
 ]
@@ -1846,6 +1847,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "neuroflux-core", editable = "packages/core" },
+    { name = "neuroflux-datasets", editable = "packages/datasets" },
     { name = "scipy", specifier = ">=1.12.0" },
     { name = "torch", specifier = ">=2.2.0" },
 ]

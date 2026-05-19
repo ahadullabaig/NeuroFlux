@@ -204,6 +204,7 @@ class TestResultsDB:
             "dataset",
             "record_id",
             "rpeak_integrity",
+            "method",
         }
         assert columns == expected
 
