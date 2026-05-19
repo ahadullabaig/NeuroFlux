@@ -14,6 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **The original "output SNR floor at 10-12 dB" hypothesis was rejected by direct measurement** (`docs/phase3_findings.md` §5.6.1). Running the SNN on a clean signal gives intrinsic output SNR ≈ 0.7 dB, not 10-12. The apparent floor seen in the main sweep is a training-regime effect (noise acts as an implicit regularizer in STDP), not an architectural capacity ceiling. Phase 6 hyperparameter optimization should target the joint (ΔSNR × rpeak) trade-off, **not** "lift the floor" by scaling the output population — `[64, 32, 64]` actually collapses rpeak (see §5.6.3).
 
+**Project is mid-pivot to a hackathon-flavored framing.** The original PLAN.md Phase 4 (academic baseline study) is being executed in a product-flavored form as Phase 3A (baselines) → 3B (noise-regime classifier) → 3C (`AdaptiveDenoiser`) → extended Phase 5 dashboard. The pitch anchor is the **dual-channel architecture**: a routed amplitude path (Butterworth / LMS / trained SNN) running in parallel with a passive-SNN R-peak timing channel — leveraging the measured `rpeak=1.000` finding from §5.6.2. See `PIVOT.md` for the working strategy doc. The pitch framing is **gated on Phase 3A measurements** (`scripts/phase3a/gate_check.py`); if those gates fail, the project regroups around surviving evidence rather than push the unmeasured claims forward. Until 3A's gates resolve, treat `PIVOT.md`'s predicted-results tables as conjecture, not fact.
+
 ---
 
 ## Commands
