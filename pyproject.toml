@@ -6,12 +6,13 @@ requires-python = ">=3.11"
 dependencies = []
 
 [tool.uv.workspace]
-members = ["packages/core", "packages/datasets", "packages/baselines"]
+members = ["packages/core", "packages/datasets", "packages/baselines", "packages/web/backend"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
     "hypothesis>=6.98.0",
     "ruff>=0.3.0",
     "mypy>=1.9.0",
@@ -31,4 +32,4 @@ ignore = []
 strict = true
 warn_return_any = true
 warn_unused_configs = true
-exclude = ["experiments", "docs", "packages/web"]
+exclude = ["experiments", "docs"]
