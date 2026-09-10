@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LIFConfig(BaseModel):
@@ -52,6 +52,34 @@ class NetworkConfig(BaseModel):
     )
     neuron: LIFConfig = Field(default_factory=LIFConfig)
     plasticity: STDPConfig = Field(default_factory=STDPConfig)
+    layer_gains: list[float] | None = Field(
+        default=None,
+        description=(
+            "Per-layer synaptic gain, one entry per neuron group "
+            "(len(layers) - 1). Overrides neuron.g_syn layer by layer. "
+            "None keeps the single global neuron.g_syn everywhere."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _check_layer_gains(self) -> "NetworkConfig":
+        """Per-layer gains must supply exactly one value per neuron group."""
+        if self.layer_gains is not None:
+            expected = len(self.layers) - 1
+            if len(self.layer_gains) != expected:
+                raise ValueError(
+                    f"layer_gains has {len(self.layer_gains)} entries but "
+                    f"{expected} neuron groups are defined by layers={self.layers}."
+                )
+            if any(g <= 0.0 for g in self.layer_gains):
+                raise ValueError("layer_gains entries must be strictly positive.")
+        return self
+
+    def gain_for_layer(self, index: int) -> float:
+        """Resolve the synaptic gain for neuron group `index`."""
+        if self.layer_gains is None:
+            return self.neuron.g_syn
+        return self.layer_gains[index]
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "NetworkConfig":

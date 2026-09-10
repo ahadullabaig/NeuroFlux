@@ -44,7 +44,14 @@ class FeedForwardNetwork(BaseNetwork):
             n_pre = self.layers[i]
             n_post = self.layers[i + 1]
 
-            self.neurons.append(LIFNeuron(n_neurons=n_post, config=config.neuron))
+            self.neurons.append(
+                LIFNeuron(
+                    n_neurons=n_post,
+                    config=config.neuron.model_copy(
+                        update={"g_syn": config.gain_for_layer(i)}
+                    ),
+                )
+            )
 
             initial = init_weights(
                 shape=(n_pre, n_post),
@@ -71,18 +78,52 @@ class FeedForwardNetwork(BaseNetwork):
         plasticity: STDPConfig | None = None,
         seed: int | None = None,
         init_scheme: InitScheme = "uniform",
+        layer_gains: list[float] | None = None,
     ) -> "FeedForwardNetwork":
         """Convenience constructor matching the public API contract."""
         config = NetworkConfig(
             layers=layers,
             neuron=neuron if neuron is not None else LIFConfig(),
             plasticity=plasticity if plasticity is not None else STDPConfig(),
+            layer_gains=layer_gains,
         )
         return cls(
             config,
             rng=np.random.default_rng(seed),
             init_scheme=init_scheme,
         )
+
+    def set_layer_gains(self, gains: list[float]) -> None:
+        """
+        Override the synaptic gain of each neuron group in place.
+
+        Rate calibration needs to vary gain per layer without rebuilding the
+        network and losing its weights. Updates `self.config.layer_gains` so a
+        later `save_checkpoint`/`NetworkConfig` round-trip stays faithful.
+
+        Args:
+            gains: One strictly positive gain per neuron group.
+
+        Raises:
+            ValueError: If the count is wrong or any gain is non-positive.
+        """
+        if len(gains) != len(self.neurons):
+            raise ValueError(f"Expected {len(self.neurons)} gains, got {len(gains)}.")
+        if any(g <= 0.0 for g in gains):
+            raise ValueError("Gains must be strictly positive.")
+
+        for neuron_group, gain in zip(self.neurons, gains, strict=True):
+            neuron_group.config = neuron_group.config.model_copy(
+                update={"g_syn": float(gain)}
+            )
+        self.config = self.config.model_copy(
+            update={"layer_gains": [float(g) for g in gains]}
+        )
+
+    @property
+    def layer_gains(self) -> list[float]:
+        """The synaptic gain currently in force for each neuron group."""
+        return [n.config.g_syn for n in self.neurons]
 
     def reset_state(self) -> None:
         for neuron_group in self.neurons:
@@ -125,6 +166,7 @@ class Network:
         plasticity: STDPConfig | None = None,
         seed: int | None = None,
         init_scheme: InitScheme = "uniform",
+        layer_gains: list[float] | None = None,
     ) -> FeedForwardNetwork:
         """Construct a feedforward SNN matching the `Network.feedforward(...)` API."""
         return FeedForwardNetwork.build(
@@ -133,4 +175,5 @@ class Network:
             plasticity=plasticity,
             seed=seed,
             init_scheme=init_scheme,
+            layer_gains=layer_gains,
         )
