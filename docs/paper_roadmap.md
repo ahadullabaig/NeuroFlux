@@ -127,13 +127,30 @@ Temporal coding does **not** escape the ceiling — it is *worse*. The claim is 
 
 ### What remains open
 
-The phenomenon is established. **What binds it is not.** That is now the paper's research content, addressed by M2 (per-stage information localisation) and M3 (analytical bound). The paper stands without them — Findings 1–5 plus the calibration fix is a complete characterisation — but they are what would make it strong rather than merely solid.
+~~The phenomenon is established. **What binds it is not.**~~ **Both are now established.**
+M2 localised the loss and M3 derived it: `1/SNR_out = 1/SNR_in + sum_k 1/Lambda_k`, with
+each `Lambda_k` capped by a weight-column cosine similarity that is fixed at 3/4 before
+training by any non-negative initialisation. Findings 1–5 and M1a are all special cases —
+measurements of non-binding stages. What remains is power (seeds, real MIT-BIH),
+statistics (R2), and the manuscript.
 
 ---
 
 ## Framing statement
 
-> Rate-coded spiking reconstruction pipelines impose an output quality ceiling that is independent of input quality, output population size, decoder integration window, and learning rule. We measure the ceiling, identify the binding constraint, and show that the architecture cannot be scaled past it without explicit gain normalisation — a failure mode that has been observed in the literature as unexplained performance collapse at larger network sizes.
+> Rate-coded spiking reconstruction pipelines impose an output quality ceiling that is
+> independent of input quality, population size, decoder integration window, and learning
+> rule. We show the ceiling follows from a cascade law — inverse SNRs add across pipeline
+> stages — and that each stage's contribution is capped by the mean pairwise error
+> correlation among its neurons. That correlation is fixed at 3/4 by any non-negative
+> weight initialisation, before training and independently of synaptic scale, which is why
+> gain normalisation cannot lift the ceiling. Decorrelating the weight columns lifts it by
+> 3.67 dB.
+
+*(Superseded framing, kept for the record: "We measure the ceiling, identify the binding
+constraint, and show that the architecture cannot be scaled past it without explicit gain
+normalisation." M1b showed gain normalisation fixes the degeneracy but not the ceiling,
+and M3 derived why.)*
 
 **Audience:** anyone building rate-coded neuromorphic signal-processing pipelines. The contribution is a limitation others will hit, with the mechanism quantified and a diagnostic protocol they can run.
 
@@ -372,18 +389,87 @@ Run only if M1 shows the ceiling flat under rate control. Instrument information
 - [x] Re-run under training (`epochs > 0`). **Done — STDP does not rescue retention.** The dominant first-layer loss is unchanged (−6.66 → −6.42 → −6.45 dB at 0/10/50 epochs); training degrades the shipped config (1.33 → 1.21 dB) and the best config (3.69 → 1.87 dB); it saturates by 10 epochs. Corroborates `phase3_findings.md` §5.6.2. See `docs/m2_findings.md` §6.
 - [ ] Re-run on real MIT-BIH.
 
-### M3 — Analytical bound
+### M3 — Analytical bound — **RESOLVED: the ceiling is derived**
 
-- [ ] **Retargeted by M2.** The encoder is not what binds (it preserves 16.5 of 19.5 dB at tau=4 ms, N=4096), so deriving its capacity bound is no longer the priority. Derive instead the **per-layer information retention of a calibrated LIF population under rate coding** — why ~22%, and what it depends on. Keep the encoder derivation as a secondary anchor: at `dt = 4 ms` and 100 Hz, `p_max = 0.4`; at 250 Hz, `p_max = 1.0` and the encoder saturates entirely. Sanity anchor: at `dt = 4 ms` and 100 Hz, `p_max = 0.4`; at 250 Hz, `p_max = 1.0` and the encoder saturates entirely.
-- [ ] Compare the predicted bound against the measured ceiling across the M1 sweep. Agreement validates the mechanism; disagreement is itself a finding.
-- [ ] **Produces:** Fig. 5 — predicted vs measured ceiling. Section III theory.
+Full write-up: **`docs/m3_findings.md`**. Library: `metrics/cascade.py`, 36 tests.
+Data: `results/m3_bound/`.
+
+**The law.** Inverse SNRs add along the pipeline:
+`1/SNR_out = 1/SNR_in + sum_k 1/Lambda_k`, where `Lambda_k` is stage `k`'s
+intrinsic SNR (what it would deliver from a noiseless input). This is Friis's
+noise-figure cascade, and it has the algebraic form of Moreno-Bote's
+`I_N = I_0/(1+eps*I_0)`. The ceiling is its `SNR_in -> inf` limit,
+`1/sum_k(1/Lambda_k)` — **a constant set entirely by the architecture.**
+
+- [x] **Derive the per-layer bound.** Done, and it replaced the target quantity:
+      M2's "~22% retention" was a ratio of decibel values, not of powers, and the
+      apparent constancy across layers was an artifact (m3_findings §1). Retention
+      is not stage-invariant; `Lambda_k` is.
+- [x] **Compare predicted against measured.** Done, with **zero free parameters**:
+      one clean-input run fixes every `Lambda_k`, and the output at every other
+      input SNR follows. Validated on three configurations — shipped `[32,16,8]`
+      tau=20, wide `[128,128,128]` tau=4, best `[512,512]` tau=20. **At input
+      SNR >= 10 dB the prediction holds to within 0.2 dB.**
+- [x] **Identify what sets `Lambda`.** The mean pairwise error correlation `c`
+      among a layer's neurons. `Lambda(N) = var_signal/(var_single*(1/N + c(1-1/N)))`,
+      which saturates at `var_signal/(c*var_single)`. Measured `c ~ 0.33-0.47` in a
+      LIF layer against ~0.07 at the encoder; the population is already saturated
+      by N=64. **This derives M1a's +0.056 dB/doubling and Finding 2's +0.16 dB.**
+- [x] **Trace `c` to its source.** The cosine similarity of weight columns, which
+      for iid entries is `mu^2/(mu^2+sigma^2)`. Every init scheme in
+      `network/topology.py` is non-negative because STDP bounds weights to `[0,1]`,
+      so for any uniform draw on `[0,a]` this is **3/4 regardless of `a`**.
+      Predicted 0.7519 vs measured 0.7525. **Scale-invariance explains why M1b's
+      gain calibration could not move the ceiling.**
+- [x] **Produces:** Fig. 5 — predicted vs measured, three configurations × six
+      input SNRs. Section III theory.
+- [ ] Derive the step from *drive* correlation (0.75, analytic) to *output-error*
+      correlation (0.33, measured). Needs the LIF transfer function linearised
+      about the calibrated operating point. Currently empirical.
+
+**Where the law fails is the good news.** Below ~10 dB input it *under*-predicts by
+0.8–2.8 dB — the network beats it. The encoder's clip to `[0,1]` acts as a limiter,
+compressing noise excursions but not the signal, which violates the additive-noise
+assumption in the network's favour. **This is `phase3_findings.md`'s regime advantage,
+derived**: the deviation is confined to exactly the input-SNR range where Phase 3
+measured a positive ΔSNR, and grows monotonically as input SNR falls.
+
+### M4 — The decorrelation intervention (new, opened by M3)
+
+M3 predicts that lowering weight-column cosine similarity lifts the ceiling.
+`init_weights(scheme="sparse")` already does this and is unused. Measured on clean
+input, `[N,N]`, tau=20 ms, all schemes rate-calibrated to 40 Hz:
+
+| scheme | cos | N=32 | N=128 | N=512 |
+|---|---:|---:|---:|---:|
+| gaussian | 0.902 | 2.44 | 3.10 | 3.26 |
+| uniform / scaled (shipped) | 0.750 | 2.73 | 3.55 | 3.87 |
+| **sparse** | **0.075** | 2.77 | **4.46** | **5.00** |
+
+Ranking is monotone in cosine similarity at every width, with firing rate held at
+40.0–40.7 Hz throughout. `[512,512]` sparse reaches **5.00 dB against the shipped
+default's 1.33 dB** — the largest single improvement in the project, from a one-word
+argument change.
+
+- [ ] Density sweep at fixed fan-in, to separate decorrelation from fan-in growth.
+      At rho=0.1, N=32 each neuron sees ~3 inputs; the N>=128 numbers are unaffected.
+- [ ] Confirm on real MIT-BIH, >= 10 seeds, with equivalence tests.
+- [ ] Signed-weight variant of `STDPSynapse`. The model says `mu -> 0` gives
+      `cos -> 0`, the strongest available intervention; STDP's `[0,1]` bound
+      currently forbids it. Scope decision needed — this may be a second paper.
 
 ### Acceptance criteria
 
-- A definitive, evidenced answer to whether the ceiling is encoder-bound.
-- `calibrate_gain` shipped, tested, and demonstrated to hold firing rate constant across ≥ 8 configurations.
-- If DPI holds: predicted and measured ceilings agree within a stated tolerance across the sweep.
-- If DPI fails: the binding stage is identified by M2 with per-stage evidence.
+- [x] A definitive, evidenced answer to whether the ceiling is encoder-bound. **It is
+      not, and which stage binds depends on configuration** — the encoder in the shipped
+      narrow/slow setup, the first LIF layer once layers widen and tau shortens. M2 §4's
+      "redistribution" is the cascade law seen from outside.
+- [x] `calibrate_gain` shipped and tested. Note M3 §5: it cannot move the ceiling, and
+      the algebra says why.
+- [x] Predicted and measured ceilings agree within a stated tolerance across the sweep:
+      **within 0.2 dB at input SNR >= 10 dB, three configurations, zero fitted parameters.**
+- [x] The binding stage is identified with per-stage evidence (M2), and its `Lambda` is
+      derived from weight statistics (M3).
 
 ---
 
@@ -506,17 +592,30 @@ Run R0 first, and do not defer it.
 
 ## Immediate next actions
 
-**R0 is complete.** `docs/related_work.md` holds the annotated bibliography and both verdicts. It changed the ordering below.
+**R0, R1, M1a, M1b, M2 and M3 are complete.** The mechanism is derived and validated;
+what is left is power, statistics and writing.
 
 1. ~~Run M1a~~ **Done** — the ceiling holds. See `docs/m1a_findings.md`.
 2. ~~Ship `calibrate_gain`~~ **Done** — `network/calibration.py`, per-layer gain is now a first-class concept via `NetworkConfig.layer_gains`.
 3. ~~Write `metrics/reconstruction.py` and `metrics/degeneracy.py`~~ **Done**, with the R1 saturation test.
-4. ~~Run M2 — localise the bottleneck.~~ **Done** — the LIF layer is the dominant sink, retaining ~22% of the information reaching it. See `docs/m2_findings.md`. Note the correction recorded there: the first reading blamed the Poisson encoder, which was an artifact of measuring it through a 20 ms readout at N=32.
-5. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2.
-6. **Re-run Findings 2 and 5 under per-layer rate control**, now that calibration exists — the `N_out` and τ numbers were taken at fixed global gain. This is the last place existing evidence could shift.
-7. **Raise M1a to ≥ 10 seeds and add equivalence tests**, and confirm on real MIT-BIH.
-8. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`, chiefly the npj regression paper (potentially the closest task match) and Kanitscheider 2015.
-9. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
+4. ~~Run M2 — localise the bottleneck.~~ **Done** — the LIF layers are the dominant sink. See `docs/m2_findings.md`, including its two recorded corrections.
+5. ~~Run M3 — derive the bound.~~ **Done** — `docs/m3_findings.md`. The cascade law, validated with zero free parameters on three configurations, traced to weight-column cosine similarity.
+6. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2. Now the
+   highest-value remaining task: every invariance claim in the paper rests on a null
+   result until R2's equivalence tests exist, and M3 makes those claims sharper and
+   therefore more exposed.
+7. **Raise everything to ≥ 10 seeds and confirm on real MIT-BIH.** M1a, M2 and M3 are
+   all at 3 seeds on synthetic ECG, single 8 s record. This is now the binding
+   credibility risk, not the science.
+8. **Run M4's density sweep** at fixed fan-in — the one open question about the
+   intervention, and the intervention is the paper's actionable contribution.
+9. **Re-run Findings 2 and 5 under per-layer rate control.** M3 predicts these will not
+   move (both sweep non-binding stages), which makes it a cheap confirmation of the law
+   rather than a risk.
+10. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`,
+    chiefly the npj regression paper and Kanitscheider 2015. Moreno-Bote et al. (2014) is
+    now load-bearing for Section III and must be read in full, not from the abstract.
+11. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
 
 ---
 
