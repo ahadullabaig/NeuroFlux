@@ -319,21 +319,39 @@ Extend Finding 3. Map the `(N_in, g_syn)` plane and locate the operating region 
 **Duration:** 1.5 weeks
 **Goal:** Find what binds the ceiling. M1 is *not* resolved after all — R0 invalidated its framing. M1a below is now the single most important experiment in the project.
 
-### M1a — The shared-input control — **NEW, BLOCKING, do this first**
+### M1a — The shared-input control — **RESOLVED: the ceiling holds**
 
 R0 (Verdict 1) found that Finding 4's `N_in` sweep cannot test what it claimed to test. Every input channel receives the same noisy scalar (`cli.py:289`), so the information about the clean signal is fixed at one sample's worth no matter how large `N_in` grows. Moreno-Bote et al. (2014) prove information *must* saturate under exactly this condition. The measured flatness is the predicted result, not evidence of an architectural ceiling.
 
-This is the experiment that decides what the paper is about.
+This is the experiment that decides what the paper is about. **It has been run.**
+Full write-up: **`docs/m1a_findings.md`**. Data: `results/m1a_shared_input/m1a_results.csv`.
 
-- [ ] Replace the tiled input with genuinely independent information. Two variants, both worth running:
+**Outcome: the ceiling holds — the pre-registered "more interesting" branch.**
+Under `independent` input (N genuinely independent noise realisations, where an ideal
+estimator gains +3.01 dB per doubling) the network gained **+0.056 dB per doubling**:
++0.25 dB across a 32× width increase where the ideal gains +15 dB. The shortfall widens
+monotonically from 8.7 dB at N=8 to 23.5 dB at N=256. `tiled` and `independent` are
+statistically indistinguishable. 0 of 54 runs degenerate.
+
+A second control swept input SNR 0 → 40 dB with no flicker: the ceiling moved ~1 dB
+across a 40 dB range. **This also clears Finding 1 of the flicker confound** (action 5
+below is discharged for the capacity experiments) and its 40 dB column lands at
+1.44–1.47 dB, agreeing with `phase3_findings.md` §5.6.1's independent measurement of
+~0.7 dB intrinsic output SNR on a clean signal.
+
+The shared-input / information-limiting-correlations explanation is therefore **falsified**
+for this system. The bottleneck is downstream of the input representation. **M2 is now the
+centrepiece of the paper**, not a supporting result.
+
+- [x] Replace the tiled input with genuinely independent information. Two variants, both worth running:
   - **(i) Independent noise realisations** — same clean signal, `N_in` independent noise draws. This is the clean information-theoretic control: information about the clean signal now genuinely grows with `N_in`.
   - **(ii) Delay-line embedding** — the `N_in` channels carry successive lags of the single noisy channel. This is the realistic engineering variant and was already planned for R5; promote it here.
-- [ ] Re-run the `N_in` sweep (8 → 256) under per-layer rate control for both variants, ≥ 10 seeds, with equivalence tests.
-- [ ] **Interpretation is fixed in advance, before running** (pre-registered, per the honesty requirements):
+- [x] Re-run the `N_in` sweep (8 → 256) under per-layer rate control for both variants. **Done at 3 seeds; ≥ 10 seeds and equivalence tests still owed (R2/R4).**
+- [x] **Interpretation was fixed in advance, before running** (pre-registered, per the honesty requirements) — the middle branch is the one that occurred:
   - Ceiling **lifts** toward the ~+3 dB/doubling prediction → information-limiting correlations explain it. The paper becomes a characterisation of where a practical rate-coded pipeline sits against the population-coding bound, plus the design rule that tiling a scalar across an input population buys nothing. Solid and useful.
   - Ceiling **holds** → the shared-input explanation is falsified, something downstream binds, and the paper is substantially more interesting. M2 then becomes the centrepiece.
   - Ceiling lifts **partially** → report the fraction of the bound recovered; the residual gap is the contribution.
-- [ ] **Produces:** the reframed Fig. 4a, and the decision on the paper's central claim.
+- [x] **Produces:** the reframed Fig. 4a, and the decision on the paper's central claim.
 
 ### M1b — Rate-controlled capacity scaling — production hardening
 
@@ -487,13 +505,15 @@ Run R0 first, and do not defer it.
 
 **R0 is complete.** `docs/related_work.md` holds the annotated bibliography and both verdicts. It changed the ordering below.
 
-1. **Run M1a — the shared-input control.** Now the single most important experiment in the project. Until it runs, we do not know whether the ceiling is an artifact of tiling one noisy scalar across the input population or a real architectural limit, and the two lead to different papers. Pre-register the interpretation before running it.
-2. **Ship `calibrate_gain` with per-layer gain as a first-class concept.** Still required — M1a depends on it, and every ceiling claim depends on it. But R0 Verdict 2 removed it from the contribution list: cite Diehl 2015 / Rueckauer 2017 / Zheng 2021 and present it as applying known practice to the STDP setting.
-3. **Write `metrics/reconstruction.py` and `metrics/degeneracy.py`.** Every number in this document depends on affine correction and the degeneracy guard being correct. The `0.00 ±0.00` rows would read as "low ceiling" without the guard, and they mean "no output at all."
-4. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2.
-5. **Drop flicker from the capacity experiments**, or sweep its amplitude independently — the measured input-SNR axis saturates near −6 dB and does not span what it claims. Findings 4 and 5 already dropped it; C1 must too.
-6. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`, chiefly the npj regression paper (potentially the closest task match) and Kanitscheider 2015.
-7. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
+1. ~~Run M1a~~ **Done** — the ceiling holds. See `docs/m1a_findings.md`.
+2. ~~Ship `calibrate_gain`~~ **Done** — `network/calibration.py`, per-layer gain is now a first-class concept via `NetworkConfig.layer_gains`.
+3. ~~Write `metrics/reconstruction.py` and `metrics/degeneracy.py`~~ **Done**, with the R1 saturation test.
+4. **Run M2 — localise the bottleneck.** Now the paper's centrepiece. Per-stage SNR proxy: correlate each stage's representation (encoder output, each layer's population rate, decoder output) against the clean signal, and find where the information dies. The candidates are the Poisson encoder, the LIF layer, and the population decoder.
+5. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2.
+6. **Re-run Findings 2 and 5 under per-layer rate control**, now that calibration exists — the `N_out` and τ numbers were taken at fixed global gain. This is the last place existing evidence could shift.
+7. **Raise M1a to ≥ 10 seeds and add equivalence tests**, and confirm on real MIT-BIH.
+8. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`, chiefly the npj regression paper (potentially the closest task match) and Kanitscheider 2015.
+9. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
 
 ---
 
