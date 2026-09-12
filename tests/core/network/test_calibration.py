@@ -202,3 +202,67 @@ def test_calibrate_gain_works_across_input_widths(n_input: int) -> None:
     rates = measure_layer_rates(net, spikes, dt=1.0)
     for rate in rates:
         assert abs(rate - 40.0) < 5.0, f"n_input={n_input} landed at {rate:.1f} Hz"
+
+
+# --------------------------------------------------------------------------
+# reset_transient_state — weights must survive an epoch boundary
+# --------------------------------------------------------------------------
+
+
+def _drive(n_steps: int = 200, n_input: int = 32) -> np.ndarray:
+    rng = np.random.default_rng(3)
+    return rng.random((n_steps, n_input)) < 0.4
+
+
+def test_reset_state_discards_learned_weights() -> None:
+    """
+    Documents the footgun `reset_transient_state` exists to avoid.
+
+    `STDPSynapse.reset_state` restores `initial_weights_copy`, so a training
+    loop that calls `network.reset_state()` between epochs silently throws away
+    everything it learned.
+    """
+    net = Network.feedforward(layers=[32, 16, 8], seed=42, init_scheme="scaled")
+    initial = [s.weights.copy() for s in net.synapses]
+
+    spikes = _drive()
+    for t in range(spikes.shape[0]):
+        net.step(spikes[t], 1.0, training=True)
+
+    trained = [s.weights.copy() for s in net.synapses]
+    assert any(
+        not np.array_equal(a, b) for a, b in zip(initial, trained, strict=True)
+    ), "training did not change any weights; the test cannot detect the reset"
+
+    net.reset_state()
+    for w_initial, synapse in zip(initial, net.synapses, strict=True):
+        np.testing.assert_array_equal(w_initial, synapse.weights)
+
+
+def test_reset_transient_state_preserves_learned_weights() -> None:
+    net = Network.feedforward(layers=[32, 16, 8], seed=42, init_scheme="scaled")
+
+    spikes = _drive()
+    for t in range(spikes.shape[0]):
+        net.step(spikes[t], 1.0, training=True)
+    trained = [s.weights.copy() for s in net.synapses]
+
+    net.reset_transient_state()
+    for w_trained, synapse in zip(trained, net.synapses, strict=True):
+        np.testing.assert_array_equal(w_trained, synapse.weights)
+
+
+def test_reset_transient_state_clears_neuron_and_trace_state() -> None:
+    net = Network.feedforward(layers=[32, 16, 8], seed=42, init_scheme="scaled")
+
+    spikes = _drive()
+    for t in range(spikes.shape[0]):
+        net.step(spikes[t], 1.0, training=True)
+
+    net.reset_transient_state()
+    for neuron_group in net.neurons:
+        np.testing.assert_allclose(neuron_group.v, neuron_group.config.v_rest)
+        np.testing.assert_allclose(neuron_group.refractory_time, 0.0)
+    for synapse in net.synapses:
+        np.testing.assert_allclose(synapse.trace_pre, 0.0)
+        np.testing.assert_allclose(synapse.trace_post, 0.0)

@@ -178,13 +178,20 @@ def run_seed(
     n_steps = drive.shape[0]
 
     if epochs:
+        # Save and restore the encoder RNG around training, so the evaluation
+        # pass sees an identical spike stream regardless of epoch count. Without
+        # this, an epochs=0 vs epochs=N comparison confounds "what training did"
+        # with "a different noise realisation". Mirrors cli.py:303-311.
+        rng_state = encoder.rng.bit_generator.state
         for _ in range(epochs):
-            net.reset_state()
+            net.reset_transient_state()
             for t in range(n_steps):
                 net.step(encoder.encode(drive[t], DT), DT, training=True)
+        encoder.rng.bit_generator.state = rng_state
 
-    # Capture every stage in one pass, plasticity off.
-    net.reset_state()
+    # Capture every stage in one pass, plasticity off. Transient reset only —
+    # `reset_state` would restore initial weights and silently discard training.
+    net.reset_transient_state()
     captured: list[list[np.ndarray]] = [[] for _ in range(len(layers))]
     for t in range(n_steps):
         all_spikes = net.step(encoder.encode(drive[t], DT), DT, training=False)
