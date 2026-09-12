@@ -366,12 +366,14 @@ The per-layer calibration itself stands (it fixed the degeneracy: `out std` hold
 
 Run only if M1 shows the ceiling flat under rate control. Instrument information content at each stage: input signal → encoded spikes → each hidden layer → output spikes → decoded signal. Estimate mutual information (or an SNR proxy) at every stage and find where it collapses.
 
-- [ ] Per-stage SNR proxy: correlate each layer's population rate against the clean signal.
-- [ ] **Produces:** Fig. 4 — information loss per pipeline stage. Names the culprit.
+- [x] Per-stage SNR proxy: correlate each layer's population rate against the clean signal. **Done — `docs/m2_findings.md`.** Scored two ways (population readout vs optimal linear readout) so information destruction is distinguished from decoder failure.
+- [x] **Produces:** Fig. 4 — information loss per pipeline stage. Names the culprit: **the LIF layer**, retaining ~22% of what reaches it; after two layers the optimal linear readout is 0.01 dB.
+- [ ] Map the ~22% retention figure across firing rate and gain before stating it as a law — currently one operating point.
+- [ ] Re-run under training (`epochs > 0`) and on real MIT-BIH.
 
 ### M3 — Analytical bound
 
-- [ ] Derive the per-timestep capacity of the Poisson encoder from `N_in`, `max_firing_rate_hz` and `dt`. Sanity anchor: at `dt = 4 ms` and 100 Hz, `p_max = 0.4`; at 250 Hz, `p_max = 1.0` and the encoder saturates entirely.
+- [ ] **Retargeted by M2.** The encoder is not what binds (it preserves 16.5 of 19.5 dB at tau=4 ms, N=4096), so deriving its capacity bound is no longer the priority. Derive instead the **per-layer information retention of a calibrated LIF population under rate coding** — why ~22%, and what it depends on. Keep the encoder derivation as a secondary anchor: at `dt = 4 ms` and 100 Hz, `p_max = 0.4`; at 250 Hz, `p_max = 1.0` and the encoder saturates entirely. Sanity anchor: at `dt = 4 ms` and 100 Hz, `p_max = 0.4`; at 250 Hz, `p_max = 1.0` and the encoder saturates entirely.
 - [ ] Compare the predicted bound against the measured ceiling across the M1 sweep. Agreement validates the mechanism; disagreement is itself a finding.
 - [ ] **Produces:** Fig. 5 — predicted vs measured ceiling. Section III theory.
 
@@ -508,7 +510,7 @@ Run R0 first, and do not defer it.
 1. ~~Run M1a~~ **Done** — the ceiling holds. See `docs/m1a_findings.md`.
 2. ~~Ship `calibrate_gain`~~ **Done** — `network/calibration.py`, per-layer gain is now a first-class concept via `NetworkConfig.layer_gains`.
 3. ~~Write `metrics/reconstruction.py` and `metrics/degeneracy.py`~~ **Done**, with the R1 saturation test.
-4. **Run M2 — localise the bottleneck.** Now the paper's centrepiece. Per-stage SNR proxy: correlate each stage's representation (encoder output, each layer's population rate, decoder output) against the clean signal, and find where the information dies. The candidates are the Poisson encoder, the LIF layer, and the population decoder.
+4. ~~Run M2 — localise the bottleneck.~~ **Done** — the LIF layer is the dominant sink, retaining ~22% of the information reaching it. See `docs/m2_findings.md`. Note the correction recorded there: the first reading blamed the Poisson encoder, which was an artifact of measuring it through a 20 ms readout at N=32.
 5. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2.
 6. **Re-run Findings 2 and 5 under per-layer rate control**, now that calibration exists — the `N_out` and τ numbers were taken at fixed global gain. This is the last place existing evidence could shift.
 7. **Raise M1a to ≥ 10 seeds and add equivalence tests**, and confirm on real MIT-BIH.
