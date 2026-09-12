@@ -261,12 +261,41 @@ in an unsupervised STDP pipeline, where no reference activation distribution exi
 
 `analysis.py:193` does not select `record_id`, and `_build_phase3_tasks` stamps `signal_type="ecg"` on every record, so all 16 records collapse into 32 groups with `n_seeds = 80`. Between-patient variance is counted as within-config seed noise — pseudo-replication, visible to any reviewer from the reported *n*.
 
-### Work
+### Work — **RESOLVED**
 
-- [ ] Fix `fetch_raw_runs` to select all 12 columns. One line; also makes `rpeak_integrity` reachable from the analysis layer for the first time.
-- [ ] Add `record_id` and `dataset` to the grouping key in `compute_statistical_significance`.
-- [ ] `paired_comparison(raw_runs, a, b, stratify_by=...)` implementing the protocol below.
-- [ ] **Equivalence testing for the invariance claims.** "The ceiling does not change with N" is a claim of *no effect*, and a non-significant p-value does not establish one. Use **TOST** (two one-sided tests) against a pre-registered equivalence margin — propose ±0.5 dB — or report the bootstrap CI and argue from its width.
+Full write-up: **`docs/r2_findings.md`**. Data: `results/phase3_r2/`.
+
+- [x] Fix `fetch_raw_runs` to select every column. Done, with a `PRAGMA table_info`
+      fallback so archived pre-Phase-3 databases still read. **`rpeak_integrity` is
+      reachable from the analysis layer for the first time** — 2560 rows that were
+      previously invisible.
+- [x] Add `record_id` and `dataset` to the grouping key. Done via `analysis.config_key`.
+      On the real sweep this turns **32 groups of n=80 into 512 groups of n=5**.
+      Synthetic sweeps are provably unaffected (`test_synthetic_grouping_is_unchanged`).
+- [x] `paired_comparison(raw_runs, factor, level_a, level_b, stratify_by=...)`
+      implementing the protocol below, exposed as `neuroflux-experiment compare`.
+- [x] **Equivalence testing.** `tost_equivalence` against a pre-registered margin, plus
+      `holm_bonferroni` and `bootstrap_median_ci` (BCa, 10 000 resamples, seeded).
+      Comparisons report **three** verdicts — `different`, `equivalent`,
+      `inconclusive` — so a null result can never be read as invariance.
+
+### What the re-analysis did to Phase 3
+
+Both §5.6.2 claims survive at the correct unit of analysis, with stronger support:
+
+| comparison | SNR_in | ΔSNR median Δ | rpeak median Δ |
+|---|---:|---:|---:|
+| trained (10 ep) − passive | 0 | **+5.12** | **−0.50** |
+| trained (10 ep) − passive | 20 | +3.48 | −0.66 |
+| 50 ep − 10 ep | 0 | **−1.45** | **+0.20** |
+| 50 ep − 10 ep | 20 | −0.30 | +0.16 |
+
+All sixteen comparisons `different` after Holm correction, every bootstrap CI excluding
+zero. **New result: the ΔSNR/rpeak trade-off reverses between 10 and 50 epochs** — 0→10
+buys ΔSNR and destroys rpeak, 10→50 returns rpeak and loses ΔSNR. The canonical Phase 3
+configuration sits near the worst point for R-peak integrity. This corroborates M2 §6
+(STDP saturates by 10 epochs, further training degrades) on real ECG from an independent
+direction.
 
 ### Protocol
 
@@ -291,10 +320,14 @@ Reporting          Every table gets an identity/control row.
 
 ### Acceptance criteria
 
-- `significance_results.csv` shows `n_seeds` equal to configured seeds per record, not seeds × records.
-- Group count equals `records × flicker × snr × epochs × tau`.
-- A regression test fails if `record_id` is dropped from the grouping key.
-- Every invariance claim in the manuscript is backed by an equivalence test, not a null result.
+- [x] `significance_results.csv` shows `n_seeds` equal to configured seeds per record,
+      not seeds × records. **Verified: 5, not 80.**
+- [x] Group count equals `records × flicker × snr × epochs × tau`.
+      **Verified: 512 = 16 × 2 × 4 × 2 × 2.**
+- [x] A regression test fails if `record_id` is dropped from the grouping key —
+      `tests/datasets/test_statistics.py::test_record_id_is_part_of_the_grouping_key`.
+- [x] Every invariance claim is backed by an equivalence test. Machinery shipped and
+      tested; applying it to Findings 1–5 is R3's job, not R2's.
 
 ---
 
@@ -600,10 +633,9 @@ what is left is power, statistics and writing.
 3. ~~Write `metrics/reconstruction.py` and `metrics/degeneracy.py`~~ **Done**, with the R1 saturation test.
 4. ~~Run M2 — localise the bottleneck.~~ **Done** — the LIF layers are the dominant sink. See `docs/m2_findings.md`, including its two recorded corrections.
 5. ~~Run M3 — derive the bound.~~ **Done** — `docs/m3_findings.md`. The cascade law, validated with zero free parameters on three configurations, traced to weight-column cosine similarity.
-6. **Fix `fetch_raw_runs` to select all 12 columns.** One line, unblocks R2. Now the
-   highest-value remaining task: every invariance claim in the paper rests on a null
-   result until R2's equivalence tests exist, and M3 makes those claims sharper and
-   therefore more exposed.
+6. ~~Fix `fetch_raw_runs` and build R2.~~ **Done** — `docs/r2_findings.md`. The
+   pseudo-replication is gone (32 groups of 80 → 512 of 5), `rpeak_integrity` is reachable,
+   and the paired/TOST/Holm/bootstrap protocol ships as `neuroflux-experiment compare`.
 7. **Raise everything to ≥ 10 seeds and confirm on real MIT-BIH.** M1a, M2 and M3 are
    all at 3 seeds on synthetic ECG, single 8 s record. This is now the binding
    credibility risk, not the science.

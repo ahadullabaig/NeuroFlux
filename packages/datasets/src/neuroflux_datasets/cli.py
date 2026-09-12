@@ -3,6 +3,7 @@
 import argparse
 import concurrent.futures
 import itertools
+import math
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -545,20 +546,30 @@ def analyze_significance_command(args: argparse.Namespace) -> None:
     )
     print(f"Mean ΔSNR overall:    {summary['mean_delta_snr_overall']:.3f} dB")
 
+    def describe(config: dict[str, Any]) -> str:
+        record = config.get("record_id")
+        where = f"{config['signal_type']}"
+        if record:
+            where = f"{config.get('dataset', '?')}/{record}"
+        return (
+            f"{where}, {config['flicker_freq']} Hz, "
+            f"{config['input_snr']} dB SNR, {config['epochs']} ep, "
+            f"τ={config['stdp_tau']} → ΔSNR={config['mean_delta_snr']:.3f} dB "
+            f"(n={config['n_seeds']})"
+        )
+
     if summary["best_config"]:
-        b = summary["best_config"]
-        print(
-            f"\nBest:  {b['signal_type']}, {b['flicker_freq']} Hz, "
-            f"{b['input_snr']} dB SNR, {b['epochs']} ep, "
-            f"τ={b['stdp_tau']} → ΔSNR={b['mean_delta_snr']:.3f} dB"
-        )
+        print(f"\nBest:  {describe(summary['best_config'])}")
     if summary["worst_config"]:
-        w = summary["worst_config"]
-        print(
-            f"Worst: {w['signal_type']}, {w['flicker_freq']} Hz, "
-            f"{w['input_snr']} dB SNR, {w['epochs']} ep, "
-            f"τ={w['stdp_tau']} → ΔSNR={w['mean_delta_snr']:.3f} dB"
-        )
+        print(f"Worst: {describe(summary['worst_config'])}")
+
+    seed_counts = {r["n_seeds"] for r in sig_results}
+    print(f"\nSeeds per config: {sorted(seed_counts)}")
+    print(
+        "  Unit of analysis is one configuration per record. If this looks like "
+        "seeds x records,\n  the grouping key has regressed — see analysis.py "
+        "and tests/datasets/test_statistics.py."
+    )
 
     print(f"\nFailure modes: {len(failures)} configs")
 
@@ -579,6 +590,110 @@ def analyze_significance_command(args: argparse.Namespace) -> None:
         print(f"Failure modes        → {fail_path}")
 
     print(f"\nAll reports saved to {out_dir}/")
+
+
+def compare_command(args: argparse.Namespace) -> None:
+    """Handles the 'compare' CLI command — the R2 paired protocol."""
+    import csv
+
+    from neuroflux_datasets.analysis import fetch_raw_runs, paired_comparison
+
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        raw_runs = fetch_raw_runs(args.db)
+    except sqlite3.OperationalError as e:
+        print(f"Error reading database: {e}")
+        return
+    if not raw_runs:
+        print("No runs found in the database.")
+        return
+
+    def coerce(text: str) -> Any:
+        """Match the column's stored type — argparse hands us strings."""
+        for cast in (int, float):
+            try:
+                return cast(text)
+            except ValueError:
+                continue
+        return text
+
+    rows = paired_comparison(
+        raw_runs,
+        factor=args.factor,
+        level_a=coerce(args.level_a),
+        level_b=coerce(args.level_b),
+        metric=args.metric,
+        stratify_by=args.stratify_by,
+        margin=args.margin,
+        alpha=args.alpha,
+    )
+    if not rows:
+        print(
+            f"No units carry both {args.factor}={args.level_a} and "
+            f"{args.factor}={args.level_b}. Nothing to pair."
+        )
+        return
+
+    def verdict(row: dict[str, Any]) -> str:
+        """
+        Significance and equivalence are independent, so there are four outcomes.
+
+        Collapsing them loses the one this project needs most: an effect can be
+        statistically real *and* smaller than the margin that would make it
+        matter. "16x the output population changes the ceiling by 0.16 dB" is
+        precisely that case, and calling it either "different" or "equivalent"
+        alone would misrepresent it.
+        """
+        if row["significant"] and not row["equivalent"]:
+            return "different"
+        if row["significant"] and row["equivalent"]:
+            return "trivial"
+        if row["equivalent"]:
+            return "equivalent"
+        return "inconclusive"
+
+    print(
+        f"\n=== {args.metric}: {args.factor} {args.level_b} vs {args.level_a} ===\n"
+        f"Paired within configuration, seeds averaged. Family size "
+        f"{rows[0]['family_size']}, Holm-Bonferroni corrected.\n"
+        f"Equivalence margin ±{args.margin} (pre-registered).\n"
+    )
+    header = (
+        f"{'stratum':>10} {'n':>4} {'median Δ':>10} {'95% CI':>18} "
+        f"{'p (Holm)':>10} {'verdict':>14}"
+    )
+    print(header)
+    print("-" * len(header))
+    for row in rows:
+        interval = (
+            f"[{row['ci_low']:+.3f}, {row['ci_high']:+.3f}]"
+            if math.isfinite(row["ci_low"])
+            else "n/a"
+        )
+        stratum = "all" if row["stratum"] is None else f"{row['stratum']}"
+        print(
+            f"{stratum:>10} {row['n_pairs']:>4} {row['median_diff']:>+10.3f} "
+            f"{interval:>18} {row['p_holm']:>10.4f} {verdict(row):>14}"
+        )
+
+    print(
+        "\n  different    — real effect, larger than the margin\n"
+        "  trivial      — real effect, but smaller than the margin\n"
+        "  equivalent   — no effect, and bounded inside the margin\n"
+        "  inconclusive — neither established. NOT evidence of invariance;\n"
+        "                 report it as underpowered."
+    )
+
+    out_path = out_dir / (
+        f"compare_{args.metric}_{args.factor}_{args.level_a}_vs_{args.level_b}.csv"
+    )
+    with open(out_path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"\nWrote {len(rows)} rows to {out_path}")
 
 
 def analyze_experiment_command(args: argparse.Namespace) -> None:
@@ -672,6 +787,44 @@ def main() -> None:
         help="p-value threshold for significance (default: 0.05).",
     )
 
+    cmp_parser = subparsers.add_parser(
+        "compare",
+        help="Paired comparison of two levels of one factor (R2 protocol).",
+    )
+    cmp_parser.add_argument("db", type=str, help="Path to the SQLite database.")
+    cmp_parser.add_argument(
+        "factor", type=str, help="Column to vary, e.g. epochs or stdp_tau."
+    )
+    cmp_parser.add_argument("level_a", type=str, help="Baseline level.")
+    cmp_parser.add_argument("level_b", type=str, help="Comparison level.")
+    cmp_parser.add_argument(
+        "--metric",
+        type=str,
+        default="delta_snr",
+        help="Column compared (default: delta_snr).",
+    )
+    cmp_parser.add_argument(
+        "--stratify-by",
+        type=str,
+        default=None,
+        help="Config column to stratify on, e.g. input_snr.",
+    )
+    cmp_parser.add_argument(
+        "--margin",
+        type=float,
+        default=0.5,
+        help="Equivalence margin in the metric's units (default: 0.5).",
+    )
+    cmp_parser.add_argument(
+        "--alpha", type=float, default=0.05, help="Significance level."
+    )
+    cmp_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="significance",
+        help="Directory to save the CSV report.",
+    )
+
     args = parser.parse_args()
 
     if args.command == "run":
@@ -680,6 +833,8 @@ def main() -> None:
         analyze_experiment_command(args)
     elif args.command == "analyze-significance":
         analyze_significance_command(args)
+    elif args.command == "compare":
+        compare_command(args)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,23 @@
-"""Analysis and plotting utilities for Phase 2 results."""
+"""Analysis and plotting utilities for experiment sweeps.
+
+**The unit of analysis is a configuration, not a run.** Phase 3 sweeps 16
+MIT-BIH records, and `_build_phase3_tasks` stamps `signal_type="ecg"` on all of
+them, so grouping by signal type alone collapsed every record into one bucket
+and counted between-patient variance as within-config seed noise. That is
+pseudo-replication, and it is visible to any reviewer from the reported *n*.
+`dataset` and `record_id` are therefore part of every grouping key here.
+
+For comparisons and invariance claims, prefer `paired_comparison` over reading
+`compute_statistical_significance` output directly. It implements the protocol
+in `docs/paper_roadmap.md` R2: seed replicates averaged within unit, Wilcoxon
+signed-rank on the paired differences, Holm-Bonferroni across the strata of one
+family, bootstrap BCa confidence intervals on the median difference, and TOST
+equivalence testing against a pre-registered margin.
+
+**A non-significant p-value is not evidence of invariance.** Every "the ceiling
+does not change with X" claim is a claim of *no effect* and needs the TOST
+verdict, which `paired_comparison` reports alongside the significance one.
+"""
 
 import math
 import sqlite3
@@ -6,7 +25,73 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-_ConfigKey = tuple[str, float, float, int, float]
+# dataset, record_id, signal_type, flicker_freq, input_snr, epochs, stdp_tau
+_ConfigKey = tuple[str, str | None, str, float, float, int, float]
+
+# Every column `ResultsDB` writes, excluding the surrogate `id`. Pre-Phase-3
+# databases lack the last three; `fetch_raw_runs` fills them from these defaults
+# rather than failing, so an archived Phase 2 sweep still reads.
+_RUN_COLUMNS: tuple[str, ...] = (
+    "signal_type",
+    "flicker_freq",
+    "input_snr",
+    "epochs",
+    "stdp_tau",
+    "seed",
+    "delta_snr",
+    "convergence_speed",
+    "dataset",
+    "record_id",
+    "rpeak_integrity",
+)
+
+_COLUMN_DEFAULTS: dict[str, Any] = {
+    "dataset": "synthetic",
+    "record_id": None,
+    "rpeak_integrity": None,
+}
+
+# Fields that identify a configuration. A comparison holds all of these fixed
+# except the one factor under test, and averages over `seed`.
+_CONFIG_FIELDS: tuple[str, ...] = (
+    "dataset",
+    "record_id",
+    "signal_type",
+    "flicker_freq",
+    "input_snr",
+    "epochs",
+    "stdp_tau",
+)
+
+
+def config_key(row: dict[str, Any]) -> _ConfigKey:
+    """The grouping key for one run: everything but the seed and the metrics."""
+    record = row.get("record_id")
+    return (
+        str(row.get("dataset", "synthetic")),
+        None if record is None else str(record),
+        str(row["signal_type"]),
+        float(row["flicker_freq"]),
+        float(row["input_snr"]),
+        int(row["epochs"]),
+        float(row["stdp_tau"]),
+    )
+
+
+def _scipy_stats() -> Any:
+    """
+    Import `scipy.stats` lazily, returning None when it is unavailable.
+
+    Every statistical function here degrades to a printed message rather than
+    raising, so plotting and aggregation still work in an environment without
+    scipy. Routing all of them through one import also keeps the single
+    `type: ignore` that scipy needs from depending on function order.
+    """
+    try:
+        from scipy import stats  # type: ignore[import-untyped]  # noqa: PLC0415
+    except ImportError:
+        return None
+    return stats
 
 
 def fetch_aggregated_data(db_path: str | Path) -> list[dict[str, Any]]:
@@ -186,16 +271,37 @@ def plot_parameter_sensitivity(
 
 
 def fetch_raw_runs(db_path: str | Path) -> list[dict[str, Any]]:
-    """Fetch every individual run row without aggregation."""
+    """
+    Fetch every individual run row without aggregation.
+
+    Selects all of `_RUN_COLUMNS`. `dataset`, `record_id` and `rpeak_integrity`
+    were added in Phase 3 and were previously dropped here, which made
+    `rpeak_integrity` unreachable from the analysis layer entirely and forced
+    every record into one group. Columns absent from an older database are
+    filled from `_COLUMN_DEFAULTS` so pre-Phase-3 sweeps still read.
+
+    Args:
+        db_path: Path to a results database.
+
+    Returns:
+        One dict per run, with every key in `_RUN_COLUMNS` present.
+    """
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT signal_type, flicker_freq, input_snr, epochs, stdp_tau,
-               seed, delta_snr, convergence_speed
-        FROM runs
-    """)
-    return [dict(row) for row in cursor.fetchall()]
+
+    present = {str(row[1]) for row in cursor.execute("PRAGMA table_info(runs)")}
+    selected = [column for column in _RUN_COLUMNS if column in present]
+    missing = [column for column in _RUN_COLUMNS if column not in present]
+    cursor.execute(f"SELECT {', '.join(selected)} FROM runs")  # noqa: S608
+
+    rows: list[dict[str, Any]] = []
+    for record in cursor.fetchall():
+        row = dict(record)
+        for column in missing:
+            row[column] = _COLUMN_DEFAULTS.get(column)
+        rows.append(row)
+    return rows
 
 
 def compute_statistical_significance(
@@ -204,13 +310,24 @@ def compute_statistical_significance(
 ) -> list[dict[str, Any]]:
     """One-sample t-test per config: H₀ = mean ΔSNR is zero across seeds.
 
-    Returns one result dict per unique (signal_type, flicker_freq, input_snr,
-    epochs, stdp_tau) combination, including t-statistic, two-tailed p-value,
-    Cohen's d, and boolean significance / improvement flags.
+    Returns one result dict per unique configuration — `dataset`, `record_id`,
+    `signal_type`, `flicker_freq`, `input_snr`, `epochs`, `stdp_tau` — including
+    t-statistic, two-tailed p-value, Cohen's d, and boolean significance /
+    improvement flags.
+
+    `dataset` and `record_id` join the key as of R2. Without them a Phase 3
+    sweep's 16 records collapsed into one group per parameter combination and
+    `n_seeds` reported seeds × records, counting between-patient variance as
+    seed noise. Synthetic sweeps are unaffected: every row shares
+    `dataset="synthetic"` and `record_id=None`, so the grouping is identical.
+
+    Note:
+        This tests whether ΔSNR differs from zero. It cannot support a claim of
+        *invariance* — for that use `paired_comparison`, which reports a TOST
+        equivalence verdict against a pre-registered margin.
     """
-    try:
-        from scipy import stats  # type: ignore[import-untyped]
-    except ImportError:
+    stats = _scipy_stats()
+    if stats is None:
         print("scipy is required for significance testing.")
         return []
 
@@ -218,16 +335,12 @@ def compute_statistical_significance(
     config_meta: dict[_ConfigKey, dict[str, Any]] = {}
 
     for r in raw_runs:
-        key: _ConfigKey = (
-            str(r["signal_type"]),
-            float(r["flicker_freq"]),
-            float(r["input_snr"]),
-            int(r["epochs"]),
-            float(r["stdp_tau"]),
-        )
+        key = config_key(r)
         groups[key].append(float(r["delta_snr"]))
         if key not in config_meta:
             config_meta[key] = {
+                "dataset": r.get("dataset", "synthetic"),
+                "record_id": r.get("record_id"),
                 "signal_type": r["signal_type"],
                 "flicker_freq": r["flicker_freq"],
                 "input_snr": r["input_snr"],
@@ -348,3 +461,304 @@ def identify_failure_modes(
             )
 
     return failures
+
+
+# ---------------------------------------------------------------------------
+# R2 — the statistical protocol
+# ---------------------------------------------------------------------------
+
+
+def holm_bonferroni(p_values: list[float]) -> list[float]:
+    """
+    Holm-Bonferroni step-down adjustment of a family of p-values.
+
+    Uniformly more powerful than Bonferroni and controls the same family-wise
+    error rate. The family is whatever set of tests is reported together, and
+    its size must be stated wherever the adjusted values appear.
+
+    Args:
+        p_values: Raw p-values. NaN entries are passed through unchanged and
+            excluded from the family size, since a test that could not run is
+            not a test that was performed.
+
+    Returns:
+        Adjusted p-values in the input order, each clipped to at most 1.0.
+    """
+    indexed = [(p, i) for i, p in enumerate(p_values) if not math.isnan(p)]
+    adjusted = [float("nan")] * len(p_values)
+    if not indexed:
+        return adjusted
+
+    indexed.sort()
+    n = len(indexed)
+    running = 0.0
+    for rank, (p, original) in enumerate(indexed):
+        running = max(running, (n - rank) * p)
+        adjusted[original] = min(1.0, running)
+    return adjusted
+
+
+def bootstrap_median_ci(
+    values: list[float],
+    confidence: float = 0.95,
+    n_resamples: int = 10_000,
+    seed: int = 0,
+) -> tuple[float, float]:
+    """
+    Bootstrap confidence interval for the median, BCa where possible.
+
+    Args:
+        values: Sample to resample.
+        confidence: Interval coverage.
+        n_resamples: Bootstrap resamples.
+        seed: Seed for reproducibility — these intervals go in the manuscript.
+
+    Returns:
+        `(low, high)`, or `(nan, nan)` when the sample is too small or
+        degenerate for an interval to mean anything. A constant sample has zero
+        spread, so BCa's acceleration term is undefined; percentile is used as
+        the fallback and a fully constant sample returns NaN rather than a
+        zero-width interval that would read as infinite precision.
+    """
+    if len(values) < 2 or len(set(values)) < 2:
+        return float("nan"), float("nan")
+
+    import numpy as np  # noqa: PLC0415
+
+    stats = _scipy_stats()
+    if stats is None:
+        print("scipy is required for bootstrap intervals.")
+        return float("nan"), float("nan")
+
+    sample = (np.asarray(values, dtype=float),)
+    for method in ("BCa", "percentile"):
+        try:
+            result = stats.bootstrap(
+                sample,
+                np.median,
+                confidence_level=confidence,
+                n_resamples=n_resamples,
+                method=method,
+                random_state=np.random.default_rng(seed),
+            )
+        except (ValueError, RuntimeWarning):
+            continue
+        low = float(result.confidence_interval.low)
+        high = float(result.confidence_interval.high)
+        if math.isfinite(low) and math.isfinite(high):
+            return low, high
+    return float("nan"), float("nan")
+
+
+def tost_equivalence(
+    differences: list[float],
+    margin: float,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """
+    Two one-sided tests for equivalence of paired differences to zero.
+
+    A non-significant difference is not evidence of no difference. TOST inverts
+    the burden: the null is that the effect is *at least* `margin`, and
+    rejecting it in both directions is positive evidence that the true effect
+    lies inside `(-margin, +margin)`.
+
+    Args:
+        differences: Paired differences, one per analysis unit.
+        margin: Equivalence margin in the metric's units, pre-registered. The
+            roadmap proposes ±0.5 dB.
+        alpha: Significance level for each one-sided test.
+
+    Returns:
+        Dict with `n`, `mean_diff`, `tost_p` (the larger of the two one-sided
+        p-values), `equivalent`, and the `(1 - 2*alpha)` interval whose
+        containment within the margin is the equivalent verdict.
+
+    Raises:
+        ValueError: If `margin` is not strictly positive.
+    """
+    if margin <= 0.0:
+        raise ValueError("Equivalence margin must be strictly positive.")
+
+    n = len(differences)
+    base: dict[str, Any] = {
+        "n": n,
+        "margin": margin,
+        "mean_diff": float("nan"),
+        "tost_p": float("nan"),
+        "equivalent": False,
+        "ci_low": float("nan"),
+        "ci_high": float("nan"),
+    }
+    if n < 2:
+        return base
+
+    stats = _scipy_stats()
+    if stats is None:
+        print("scipy is required for equivalence testing.")
+        return base
+
+    mean_diff = sum(differences) / n
+    variance = sum((x - mean_diff) ** 2 for x in differences) / (n - 1)
+    std_err = math.sqrt(variance / n)
+    base["mean_diff"] = mean_diff
+
+    if std_err == 0.0:
+        # Every unit moved by exactly the same amount. The effect is known
+        # exactly, so equivalence reduces to whether it sits inside the margin.
+        base["tost_p"] = 0.0 if abs(mean_diff) < margin else 1.0
+        base["equivalent"] = abs(mean_diff) < margin
+        base["ci_low"] = base["ci_high"] = mean_diff
+        return base
+
+    df = n - 1
+    p_lower = float(stats.t.sf((mean_diff + margin) / std_err, df))
+    p_upper = float(stats.t.cdf((mean_diff - margin) / std_err, df))
+    tost_p = max(p_lower, p_upper)
+
+    half_width = float(stats.t.ppf(1.0 - alpha, df)) * std_err
+    base["tost_p"] = tost_p
+    base["equivalent"] = tost_p < alpha
+    base["ci_low"] = mean_diff - half_width
+    base["ci_high"] = mean_diff + half_width
+    return base
+
+
+def _unit_means(
+    raw_runs: list[dict[str, Any]],
+    factor: str,
+    level: Any,
+    metric: str,
+) -> dict[tuple[Any, ...], float]:
+    """Mean `metric` per analysis unit, for runs at one level of `factor`."""
+    fields = [f for f in _CONFIG_FIELDS if f != factor]
+    buckets: defaultdict[tuple[Any, ...], list[float]] = defaultdict(list)
+    for row in raw_runs:
+        if row.get(factor) != level:
+            continue
+        value = row.get(metric)
+        if value is None:
+            continue
+        buckets[tuple(row.get(f) for f in fields)].append(float(value))
+    return {key: sum(vals) / len(vals) for key, vals in buckets.items()}
+
+
+def paired_comparison(
+    raw_runs: list[dict[str, Any]],
+    factor: str,
+    level_a: Any,
+    level_b: Any,
+    metric: str = "delta_snr",
+    stratify_by: str | None = None,
+    margin: float = 0.5,
+    alpha: float = 0.05,
+    seed: int = 0,
+) -> list[dict[str, Any]]:
+    """
+    Compare two levels of one factor, paired within analysis unit.
+
+    Implements the R2 protocol. Seed replicates are averaged so the unit of
+    analysis is a configuration (a record, for Phase 3 data) rather than a run;
+    units are paired across the two levels; Wilcoxon signed-rank tests the
+    difference; Holm-Bonferroni corrects across the strata of this one family;
+    the median difference gets a bootstrap BCa interval; and TOST reports
+    whether the difference is equivalent to zero within `margin`.
+
+    Read `significant` and `equivalent` together. Both false means the data are
+    simply uninformative at this sample size — which is the honest reading of
+    most non-significant results, and the one a bare p-value hides.
+
+    Args:
+        raw_runs: Rows from `fetch_raw_runs`.
+        factor: Column varied between the two arms, e.g. `"epochs"`.
+        level_a: Baseline level. Differences are `b - a`.
+        level_b: Comparison level.
+        metric: Column compared, e.g. `"delta_snr"` or `"rpeak_integrity"`.
+        stratify_by: Optional config column to split on before testing — the
+            roadmap requires stratifying by input-SNR class, because the regime
+            advantage is invisible in a global aggregate. Each stratum is one
+            test in the family.
+        margin: Pre-registered equivalence margin, in the metric's units.
+        alpha: Significance level, for both the Wilcoxon and each TOST arm.
+        seed: Seed for the bootstrap.
+
+    Returns:
+        One dict per stratum (or a single dict when `stratify_by` is None),
+        each carrying `n_pairs`, `median_diff`, the bootstrap interval,
+        `p_value`, `p_holm`, `significant`, the TOST fields, and
+        `family_size` so the correction can be reported honestly.
+
+    Raises:
+        ValueError: If `stratify_by` is the factor itself, which would put the
+            same runs in both arms of every stratum.
+    """
+    if stratify_by == factor:
+        raise ValueError(f"Cannot stratify by {factor!r}, the factor under comparison.")
+
+    means_a = _unit_means(raw_runs, factor, level_a, metric)
+    means_b = _unit_means(raw_runs, factor, level_b, metric)
+    fields = [f for f in _CONFIG_FIELDS if f != factor]
+
+    strata: defaultdict[Any, list[tuple[tuple[Any, ...], float]]] = defaultdict(list)
+    for key in means_a.keys() & means_b.keys():
+        stratum = key[fields.index(stratify_by)] if stratify_by else None
+        strata[stratum].append((key, means_b[key] - means_a[key]))
+
+    stats = _scipy_stats()
+    if stats is None:
+        print("scipy is required for paired comparison.")
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for stratum in sorted(strata, key=lambda v: (v is not None, v)):
+        pairs = strata[stratum]
+        diffs = [d for _, d in pairs]
+        n = len(diffs)
+
+        statistic, p_value = float("nan"), float("nan")
+        if n >= 2 and any(d != 0.0 for d in diffs):
+            result = stats.wilcoxon(diffs, zero_method="wilcox")
+            statistic = float(result.statistic)
+            p_value = float(result.pvalue)
+
+        low, high = bootstrap_median_ci(diffs, seed=seed)
+        equivalence = tost_equivalence(diffs, margin=margin, alpha=alpha)
+
+        row: dict[str, Any] = {
+            "factor": factor,
+            "level_a": level_a,
+            "level_b": level_b,
+            "metric": metric,
+            "stratify_by": stratify_by,
+            "stratum": stratum,
+            "n_pairs": n,
+            "median_diff": (
+                float(sorted(diffs)[n // 2])
+                if n % 2
+                else (sorted(diffs)[n // 2 - 1] + sorted(diffs)[n // 2]) / 2.0
+            )
+            if n
+            else float("nan"),
+            "ci_low": low,
+            "ci_high": high,
+            "wilcoxon_stat": statistic,
+            "p_value": p_value,
+        }
+        row.update(
+            {
+                "mean_diff": equivalence["mean_diff"],
+                "tost_p": equivalence["tost_p"],
+                "equivalent": equivalence["equivalent"],
+                "margin": margin,
+                "tost_ci_low": equivalence["ci_low"],
+                "tost_ci_high": equivalence["ci_high"],
+            }
+        )
+        rows.append(row)
+
+    adjusted = holm_bonferroni([r["p_value"] for r in rows])
+    for row, p_holm in zip(rows, adjusted, strict=True):
+        row["p_holm"] = p_holm
+        row["family_size"] = len(rows)
+        row["significant"] = not math.isnan(p_holm) and p_holm < alpha
+    return rows
