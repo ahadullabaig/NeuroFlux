@@ -770,3 +770,181 @@ class TestRunExperimentCommandFailures:
         n = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
         conn.close()
         assert n == 1
+
+
+class TestCompareCommand:
+    """Exercise ``compare_command`` — the R2 paired protocol's entry point."""
+
+    @staticmethod
+    def _phase3_db(db_path: Path) -> None:
+        """A small Phase 3-shaped sweep: two epoch levels, several records."""
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            CREATE TABLE runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_type TEXT, flicker_freq REAL, input_snr REAL,
+                epochs INTEGER, stdp_tau REAL, seed INTEGER,
+                delta_snr REAL, convergence_speed INTEGER,
+                dataset TEXT, record_id TEXT, rpeak_integrity REAL
+            )
+        """)
+        rows = [
+            (
+                "ecg",
+                50.0,
+                snr,
+                epochs,
+                20.0,
+                seed,
+                1.0 + (2.0 if epochs else 0.0) + 0.05 * seed,
+                5,
+                "mit-bih",
+                record,
+                1.0 if epochs == 0 else 0.5,
+            )
+            for record in ("100", "101", "103", "105", "108", "112")
+            for snr in (0.0, 20.0)
+            for epochs in (0, 10)
+            for seed in range(3)
+        ]
+        conn.executemany(
+            "INSERT INTO runs (signal_type, flicker_freq, input_snr, epochs,"
+            " stdp_tau, seed, delta_snr, convergence_speed, dataset, record_id,"
+            " rpeak_integrity) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
+        )
+        conn.commit()
+        conn.close()
+
+    def _args(self, db: Path, out: Path, **overrides: Any) -> argparse.Namespace:
+        base: dict[str, Any] = {
+            "db": str(db),
+            "factor": "epochs",
+            "level_a": "0",
+            "level_b": "10",
+            "metric": "delta_snr",
+            "stratify_by": None,
+            "margin": 0.5,
+            "alpha": 0.05,
+            "output_dir": str(out),
+        }
+        base.update(overrides)
+        return argparse.Namespace(**base)
+
+    def test_writes_csv_and_reports_difference(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        cli_mod.compare_command(self._args(db, tmp_path / "out"))
+
+        captured = capsys.readouterr().out
+        assert "different" in captured
+        out_file = tmp_path / "out" / "compare_delta_snr_epochs_0_vs_10.csv"
+        assert out_file.exists()
+        assert "n_pairs" in out_file.read_text()
+
+    def test_stratifies_and_reports_family_size(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        cli_mod.compare_command(
+            self._args(db, tmp_path / "out", stratify_by="input_snr")
+        )
+        assert "Family size 2" in capsys.readouterr().out
+
+    def test_reports_equivalence_within_margin(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A 2.0 dB effect is equivalent to zero only under an absurd margin."""
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        cli_mod.compare_command(self._args(db, tmp_path / "out", margin=10.0))
+        assert "equivalent" in capsys.readouterr().out
+
+    def test_coerces_levels_to_the_column_type(self, tmp_path: Path) -> None:
+        """argparse hands over strings; the DB stores ints and floats."""
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        out = tmp_path / "out"
+        cli_mod.compare_command(
+            self._args(db, out, factor="stdp_tau", level_a="20.0", level_b="20.0")
+        )
+        assert (out / "compare_delta_snr_stdp_tau_20.0_vs_20.0.csv").exists()
+
+    def test_non_numeric_levels_stay_strings(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        cli_mod.compare_command(
+            self._args(
+                db,
+                tmp_path / "o",
+                factor="dataset",
+                level_a="mit-bih",
+                level_b="synthetic",
+            )
+        )
+        assert "Nothing to pair" in capsys.readouterr().out
+
+    def test_unpairable_levels_report_cleanly(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "sweep.db"
+        self._phase3_db(db)
+        cli_mod.compare_command(self._args(db, tmp_path / "o", level_b="999"))
+        assert "Nothing to pair" in capsys.readouterr().out
+
+    def test_empty_database(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "empty.db"
+        conn = sqlite3.connect(str(db))
+        conn.execute("CREATE TABLE runs (id INTEGER PRIMARY KEY, signal_type TEXT)")
+        conn.commit()
+        conn.close()
+        cli_mod.compare_command(self._args(db, tmp_path / "o"))
+        assert "No runs found" in capsys.readouterr().out
+
+    def test_missing_table_is_reported_not_raised(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        db = tmp_path / "broken.db"
+        sqlite3.connect(str(db)).close()
+        cli_mod.compare_command(self._args(db, tmp_path / "o"))
+        assert "Error reading database" in capsys.readouterr().out
+
+    def test_compare_subcommand_routes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``neuroflux-experiment compare db epochs 0 10`` dispatches correctly."""
+        called: dict[str, argparse.Namespace] = {}
+        monkeypatch.setattr(
+            cli_mod,
+            "compare_command",
+            lambda args: called.setdefault("args", args),
+        )
+        db = tmp_path / "x.db"
+        db.touch()
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "neuroflux-experiment",
+                "compare",
+                str(db),
+                "epochs",
+                "0",
+                "10",
+                "--stratify-by",
+                "input_snr",
+                "--margin",
+                "0.25",
+            ],
+        )
+        main()
+        assert called["args"].factor == "epochs"
+        assert called["args"].stratify_by == "input_snr"
+        assert called["args"].margin == 0.25

@@ -449,7 +449,7 @@ class TestFetchRawRuns:
         assert rows == []
 
     def test_row_keys(self, tmp_path: Path) -> None:
-        """Each row contains exactly the expected keys."""
+        """Each row carries every column, Phase 3 additions included."""
         db_path = tmp_path / "keys.db"
         _create_test_db(db_path, _sample_rows())
         rows = fetch_raw_runs(db_path)
@@ -462,8 +462,25 @@ class TestFetchRawRuns:
             "seed",
             "delta_snr",
             "convergence_speed",
+            "dataset",
+            "record_id",
+            "rpeak_integrity",
         }
         assert set(rows[0].keys()) == expected
+
+    def test_pre_phase3_schema_gets_defaults(self, tmp_path: Path) -> None:
+        """
+        An archived 8-column database still reads.
+
+        `_create_test_db` builds the pre-Phase-3 schema deliberately, so this
+        exercises the `PRAGMA table_info` fallback rather than the migration.
+        """
+        db_path = tmp_path / "legacy.db"
+        _create_test_db(db_path, _sample_rows())
+        rows = fetch_raw_runs(db_path)
+        assert all(r["dataset"] == "synthetic" for r in rows)
+        assert all(r["record_id"] is None for r in rows)
+        assert all(r["rpeak_integrity"] is None for r in rows)
 
     def test_row_values_match(self, tmp_path: Path) -> None:
         """delta_snr values match what was inserted."""
@@ -531,6 +548,8 @@ class TestComputeStatisticalSignificance:
         """Each result dict has the expected keys."""
         results = compute_statistical_significance(_make_raw_runs(_CLEARLY_POSITIVE))
         expected = {
+            "dataset",
+            "record_id",
             "signal_type",
             "flicker_freq",
             "input_snr",

@@ -2,6 +2,16 @@
 
 **Status:** Phase 3 complete. Operating regime characterized. Phase 4 should proceed with a regime-stratified comparison framework rather than a global head-to-head.
 
+> **Re-analysed under R2 — see `docs/r2_findings.md`.** Every statistic in this document
+> was computed with a grouping key that omitted `record_id`, so all 16 MIT-BIH records
+> collapsed into 32 groups and the reported `n = 80` was 5 seeds x 16 patients presented as
+> 80 replicates of one condition. The unit of analysis is now one configuration per record
+> (512 groups, `n = 5`; 16 records paired per comparison). **Every conclusion below holds in
+> direction.** The precision claims are restated in `r2_findings.md` §3, which confirms
+> §5.6.2's trade-off with bootstrap intervals and adds one new result: the ΔSNR/rpeak
+> trade-off *reverses* between 10 and 50 epochs, so the canonical 10-epoch configuration
+> sits near the worst point for R-peak integrity.
+
 **Source data:** `results/phase3_full_sweep.db` (2,560 rows). Analysis artifacts: `results/phase3_full_sig/significance_results.csv`, `results/phase3_full_sig/failure_modes.csv`, `results/phase3_full_figures/*.png`.
 
 ---
