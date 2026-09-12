@@ -54,7 +54,8 @@ from neuroflux_core import (
     calibrate_gain,
 )
 from neuroflux_core.metrics.reconstruction import affine_corrected_snr
-from neuroflux_datasets.synthetic import add_gaussian_noise, generate_ecg
+from neuroflux_datasets.signals import DEFAULT_CACHE_DIR, load_clean_ecg
+from neuroflux_datasets.synthetic import add_gaussian_noise
 
 FS = 250.0
 DT = 1000.0 / FS
@@ -72,6 +73,7 @@ class StageResult:
     order: int
     n_units: int
     seed: int
+    unit: str
     pop_snr_db: float
     linear_train_db: float
     linear_test_db: float
@@ -137,10 +139,20 @@ def run_seed(
     layers: list[int],
     epochs: int,
     tau_decode: float = TAU_DECODE,
+    dataset: str = "synthetic",
+    unit: str = "synthetic",
+    cache_dir: str = DEFAULT_CACHE_DIR,
 ) -> list[StageResult]:
     """Run one seed and score every stage of the pipeline."""
     rng = np.random.default_rng(seed)
-    clean = generate_ecg(duration_s=duration_s, fs=FS)
+    clean = load_clean_ecg(
+        dataset,
+        unit,
+        duration_s=duration_s,
+        fs=FS,
+        window=seed,
+        cache_dir=cache_dir,
+    )
     noisy = add_gaussian_noise(clean, input_snr_db, rng)
     n_input = layers[0]
     drive = np.tile(noisy, (n_input, 1)).T
@@ -208,6 +220,7 @@ def run_seed(
             order=0,
             n_units=1,
             seed=seed,
+            unit=unit,
             pop_snr_db=affine_corrected_snr(clean, noisy),
             linear_train_db=affine_corrected_snr(
                 clean[: n_steps // 2], noisy[: n_steps // 2]
@@ -230,6 +243,7 @@ def run_seed(
                 order=idx + 1,
                 n_units=spikes.shape[1],
                 seed=seed,
+                unit=unit,
                 pop_snr_db=affine_corrected_snr(clean, decoded),
                 linear_train_db=train_db,
                 linear_test_db=test_db,
@@ -260,6 +274,17 @@ def main() -> None:
         help="use [32,32,32] so width never changes between stages",
     )
     parser.add_argument(
+        "--dataset", choices=["synthetic", "mit-bih"], default="synthetic"
+    )
+    parser.add_argument(
+        "--records",
+        type=str,
+        nargs="+",
+        default=None,
+        help="MIT-BIH records; the record is the unit of analysis (default: 214)",
+    )
+    parser.add_argument("--cache-dir", type=str, default=DEFAULT_CACHE_DIR)
+    parser.add_argument(
         "--out", type=Path, default=Path("results/m2_bottleneck/m2_results.csv")
     )
     args = parser.parse_args()
@@ -272,16 +297,32 @@ def main() -> None:
 
     print(
         f"M2 — per-stage information localisation   ({label}, "
-        f"epochs={args.epochs}, input SNR={args.input_snr} dB, "
+        f"epochs={args.epochs}, input SNR={args.input_snr} dB, {args.dataset}, "
         f"{args.seeds} seeds, {args.duration}s)"
     )
     print("All scores are affine-corrected SNR in dB.\n")
 
+    units = (
+        (list(args.records) if args.records else ["214"])
+        if args.dataset == "mit-bih"
+        else ["synthetic"]
+    )
     results: list[StageResult] = []
-    for seed in range(args.seeds):
-        results.extend(
-            run_seed(seed, args.input_snr, args.duration, layers, args.epochs, args.tau)
-        )
+    for unit in units:
+        for seed in range(args.seeds):
+            results.extend(
+                run_seed(
+                    seed,
+                    args.input_snr,
+                    args.duration,
+                    layers,
+                    args.epochs,
+                    args.tau,
+                    dataset=args.dataset,
+                    unit=unit,
+                    cache_dir=args.cache_dir,
+                )
+            )
 
     order = sorted({(r.order, r.stage, r.n_units) for r in results})
     print(
@@ -291,7 +332,7 @@ def main() -> None:
     print("-" * 92)
     prev_pop: float | None = None
     prev_lin: float | None = None
-    for _, stage, units in order:
+    for _, stage, n_units in order:
         rows = [r for r in results if r.stage == stage]
         pop = float(np.mean([r.pop_snr_db for r in rows]))
         pop_sd = float(np.std([r.pop_snr_db for r in rows]))
@@ -302,7 +343,7 @@ def main() -> None:
         d_pop = "" if prev_pop is None else f"  ({pop - prev_pop:+.2f})"
         d_lin = "" if prev_lin is None else f"  ({lin - prev_lin:+.2f})"
         print(
-            f"{stage:>14} {units:>6} | {pop:>7.2f} ±{pop_sd:>4.2f}{d_pop:>8} "
+            f"{stage:>14} {n_units:>6} | {pop:>7.2f} ±{pop_sd:>4.2f}{d_pop:>8} "
             f"| {lin:>7.2f} ±{lin_sd:>4.2f}{d_lin:>8} | {train:>14.2f} "
             f"| {clip * 100:>7.2f}%"
         )

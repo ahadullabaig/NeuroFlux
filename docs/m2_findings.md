@@ -222,3 +222,30 @@ weight initialisation, before training, independently of synaptic scale.
 - The linear readout is fit with up to 128 features on ~1000 training samples; the
   train/test gap (e.g. 10.33 vs 8.25 at the encoder) shows mild overfitting, so the test
   column is the one to quote.
+
+## 8. Confirmed on real MIT-BIH
+
+The decomposition has been re-run on all 16 Phase 3 records, shipped configuration,
+20 dB input, with the record as the unit of analysis:
+
+```
+uv run python scripts/m2_bottleneck/run_m2.py --dataset mit-bih \
+    --records 100 101 103 105 108 112 113 119 200 207 212 214 228 231 232 234 \
+    --seeds 1 --input-snr 20.0
+```
+
+| stage | units | population | linear (test) | clipped |
+|---|---:|---:|---:|---:|
+| analog input | 1 | 20.05 ± 0.02 | 19.88 ± 0.30 | 0.00% |
+| encoded | 32 | 3.79 ± 1.15 | 3.28 ± 1.18 | 6.54% |
+| layer1 | 16 | 2.76 ± 0.98 | 2.84 ± 0.98 | 0.91% |
+| layer2 | 8 | **1.65 ± 0.70** | 1.71 ± 0.73 | 0.71% |
+
+**§3's central control holds on real ECG:** population readout and optimal linear readout
+agree at every stage, so the information is genuinely destroyed rather than merely
+inaccessible to the population mean. Per-record spread is much wider than the synthetic
+seed spread (±1.15 vs ±0.21 at the encoder), which is exactly the between-patient variance
+that R2 found was previously being reported as seed noise.
+
+Full per-stage intrinsics per record, and the mechanism behind them, are in
+`docs/m3_findings.md` §8.

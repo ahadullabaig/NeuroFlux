@@ -28,10 +28,15 @@ stage dominates the sum rather than a separate fact about each knob.
 Spike statistics (rate, Fano factor) are recorded alongside so the same runs
 feed the structural model in `noise_structure.py`.
 
+The unit of analysis is a **record**, per the R2 protocol: each record gets its
+own `Lambda_k` from its own clean run, and its own prediction is checked against
+its own measurement. Sixteen records therefore give sixteen independent tests of
+the law rather than one pooled test.
+
 Usage:
     uv run python scripts/m3_bound/run_m3.py
     uv run python scripts/m3_bound/run_m3.py --layers 512 512 --tau 20
-    uv run python scripts/m3_bound/run_m3.py --layers 128 128 128 --tau 4
+    uv run python scripts/m3_bound/run_m3.py --dataset mit-bih --seeds 2
 """
 
 from __future__ import annotations
@@ -53,7 +58,8 @@ from neuroflux_core import (
 from neuroflux_core.metrics.cascade import cascade_snr_db, intrinsic_snr_db
 from neuroflux_core.metrics.degeneracy import is_degenerate
 from neuroflux_core.metrics.reconstruction import affine_corrected_snr
-from neuroflux_datasets.synthetic import add_gaussian_noise, generate_ecg
+from neuroflux_datasets.signals import PHASE3_RECORDS, load_clean_ecg
+from neuroflux_datasets.synthetic import add_gaussian_noise
 
 FS = 250.0
 DT = 1000.0 / FS
@@ -61,6 +67,7 @@ TAU_DECODE = 20.0
 MAX_RATE_HZ = 100.0
 TARGET_RATE_HZ = 40.0
 CALIBRATION_S = 2.0
+CACHE_DIR = "data/mit_bih"
 
 # The clean run is the measurement that anchors everything else, so it is
 # marked with a sentinel rather than a very large SNR: `1/SNR_in` is exactly
@@ -73,6 +80,7 @@ class StageRow:
     """One stage of one run, with everything the cascade model needs."""
 
     config: str
+    unit: str
     input_snr_nominal: float
     input_snr_measured: float
     stage: str
@@ -137,17 +145,17 @@ def fano_factor(spikes: np.ndarray, dt: float, window_ms: float) -> float:
 
 
 def run_seed(
+    clean: np.ndarray,
     seed: int,
     input_snr_db: float,
-    duration_s: float,
     layers: list[int],
     tau_decode: float,
     target_rate_hz: float,
     config_label: str,
+    unit: str,
 ) -> list[StageRow]:
-    """Run one seed at one input SNR and score every stage."""
+    """Run one seed at one input SNR on one signal, and score every stage."""
     rng = np.random.default_rng(seed)
-    clean = generate_ecg(duration_s=duration_s, fs=FS)
     noisy = (
         clean.copy()
         if math.isinf(input_snr_db)
@@ -202,6 +210,7 @@ def run_seed(
     rows = [
         StageRow(
             config=config_label,
+            unit=unit,
             input_snr_nominal=input_snr_db,
             input_snr_measured=measured_in,
             stage="analog_input",
@@ -224,6 +233,7 @@ def run_seed(
         rows.append(
             StageRow(
                 config=config_label,
+                unit=unit,
                 input_snr_nominal=input_snr_db,
                 input_snr_measured=measured_in,
                 stage=name,
@@ -253,6 +263,21 @@ def main() -> None:
     parser.add_argument("--target-rate", type=float, default=TARGET_RATE_HZ)
     parser.add_argument("--layers", type=int, nargs="+", default=[32, 16, 8])
     parser.add_argument(
+        "--dataset",
+        choices=["synthetic", "mit-bih"],
+        default="synthetic",
+        help="signal source; mit-bih makes the record the unit of analysis",
+    )
+    parser.add_argument(
+        "--records",
+        type=str,
+        nargs="+",
+        default=None,
+        help="MIT-BIH records to use "
+        f"(default: the {len(PHASE3_RECORDS)} Phase 3 records)",
+    )
+    parser.add_argument("--cache-dir", type=str, default=CACHE_DIR)
+    parser.add_argument(
         "--input-snrs",
         type=float,
         nargs="+",
@@ -268,82 +293,169 @@ def main() -> None:
     label = f"layers={layers}, tau={args.tau:.0f}ms, rate={args.target_rate:.0f}Hz"
     stage_names = ["encoded", *[f"layer{i + 1}" for i in range(len(layers) - 1)]]
 
-    print(f"M3 — cascade law   ({label}, {args.seeds} seeds, {args.duration}s)")
+    if args.dataset == "mit-bih":
+        units = list(args.records) if args.records else list(PHASE3_RECORDS)
+    else:
+        units = ["synthetic"]
+
+    print(
+        f"M3 — cascade law   ({label}, {args.dataset}, {len(units)} unit(s) x "
+        f"{args.seeds} seed(s), {args.duration}s)"
+    )
     print("All scores are affine-corrected SNR in dB.\n")
 
     all_rows: list[StageRow] = []
+    # Each unit is tested against its own Lambdas, so a 16-record run is 16
+    # independent tests of the law rather than one pooled test.
+    lambdas_by_unit: dict[str, list[float]] = {}
+    clean_by_unit: dict[str, list[np.ndarray]] = {}
+    skipped: list[str] = []
 
-    # Step 1: the clean run. This is the entire model.
-    clean_rows: list[StageRow] = []
-    for seed in range(args.seeds):
-        clean_rows.extend(
-            run_seed(
-                seed, CLEAN, args.duration, layers, args.tau, args.target_rate, label
-            )
-        )
-    all_rows.extend(clean_rows)
-
-    clean_snr = [mean_by_stage(clean_rows, name) for name in stage_names]
-    lambdas: list[float] = []
-    prev = math.inf
     print("Step 1 — clean input (SNR_in = inf). Per-stage intrinsic SNRs:\n")
     print(
-        f"{'stage':>14} {'units':>6} {'SNR_out':>9} {'Lambda_k':>10} "
+        f"{'unit':>10} {'stage':>10} {'units':>6} {'SNR_out':>9} {'Lambda_k':>10} "
         f"{'rate Hz':>9} {'Fano':>7}"
     )
-    print("-" * 62)
-    for name, snr in zip(stage_names, clean_snr, strict=True):
-        lam = snr if math.isinf(prev) else intrinsic_snr_db(prev, snr)
-        lambdas.append(lam)
-        stage_rows = [r for r in clean_rows if r.stage == name]
-        print(
-            f"{name:>14} {stage_rows[0].n_units:>6} {snr:>9.2f} {lam:>10.2f} "
-            f"{np.mean([r.mean_rate_hz for r in stage_rows]):>9.1f} "
-            f"{np.mean([r.fano for r in stage_rows]):>7.3f}"
-        )
-        prev = snr
-    ceiling = clean_snr[-1]
-    print(f"\n  Predicted ceiling (= clean-input output) = {ceiling:.2f} dB")
+    print("-" * 68)
 
-    # Step 2: predict every noisy run from the clean run alone.
-    print("\nStep 2 — prediction vs measurement. No parameters are fitted here.\n")
-    print(
-        f"{'SNR_in':>8} {'stage':>14} {'predicted':>10} {'measured':>9} {'residual':>9}"
-    )
-    print("-" * 54)
-    residuals: list[float] = []
-    for nominal in args.input_snrs:
-        rows: list[StageRow] = []
-        for seed in range(args.seeds):
-            rows.extend(
+    for unit in units:
+        try:
+            signals = [
+                load_clean_ecg(
+                    args.dataset,
+                    unit,
+                    duration_s=args.duration,
+                    fs=FS,
+                    window=seed,
+                    cache_dir=args.cache_dir,
+                )
+                for seed in range(args.seeds)
+            ]
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"{unit:>10}  skipped — {exc}")
+            skipped.append(unit)
+            continue
+        clean_by_unit[unit] = signals
+
+        clean_rows: list[StageRow] = []
+        for seed, signal in enumerate(signals):
+            clean_rows.extend(
                 run_seed(
+                    signal,
                     seed,
-                    nominal,
-                    args.duration,
+                    CLEAN,
                     layers,
                     args.tau,
                     args.target_rate,
                     label,
+                    unit,
                 )
             )
-        all_rows.extend(rows)
-        measured_in = mean_by_stage(rows, "analog_input")
-        for depth, name in enumerate(stage_names, start=1):
-            predicted = cascade_snr_db(measured_in, lambdas[:depth])
-            measured = mean_by_stage(rows, name)
-            residuals.append(measured - predicted)
-            print(
-                f"{measured_in:>8.2f} {name:>14} {predicted:>10.2f} "
-                f"{measured:>9.2f} {measured - predicted:>+9.2f}"
-            )
-        print("-" * 54)
+        all_rows.extend(clean_rows)
 
-    arr = np.asarray(residuals)
+        lambdas: list[float] = []
+        prev = math.inf
+        for name in stage_names:
+            snr = mean_by_stage(clean_rows, name)
+            lam = snr if math.isinf(prev) else intrinsic_snr_db(prev, snr)
+            lambdas.append(lam)
+            block = [r for r in clean_rows if r.stage == name]
+            print(
+                f"{unit:>10} {name:>10} {block[0].n_units:>6} {snr:>9.2f} "
+                f"{lam:>10.2f} {np.mean([r.mean_rate_hz for r in block]):>9.1f} "
+                f"{np.mean([r.fano for r in block]):>7.3f}"
+            )
+            prev = snr
+        lambdas_by_unit[unit] = lambdas
+
+    if not lambdas_by_unit:
+        print("\nNo usable units. Nothing to test.")
+        return
+
+    ceilings = [
+        mean_by_stage(
+            [r for r in all_rows if r.unit == unit and math.isinf(r.input_snr_nominal)],
+            stage_names[-1],
+        )
+        for unit in lambdas_by_unit
+    ]
     print(
-        f"\nResidual (measured - predicted) over {arr.size} stage-by-SNR points:\n"
-        f"  mean {arr.mean():+.3f} dB   median {np.median(arr):+.3f} dB   "
-        f"RMS {np.sqrt(np.mean(arr**2)):.3f} dB   max |.| {np.max(np.abs(arr)):.3f} dB"
+        f"\n  Predicted ceiling (= clean-input output), n={len(ceilings)} unit(s): "
+        f"{np.mean(ceilings):.2f} ± {np.std(ceilings):.2f} dB "
+        f"[{np.min(ceilings):.2f}, {np.max(ceilings):.2f}]"
     )
+
+    # Step 2: predict every noisy run from that unit's own clean run.
+    print("\nStep 2 — prediction vs measurement. No parameters are fitted here.\n")
+    print(
+        f"{'SNR_in':>8} {'stage':>10} {'predicted':>10} {'measured':>9} "
+        f"{'residual':>18}"
+    )
+    print("-" * 58)
+    # (nominal input SNR, residual) so the high-SNR regime can be reported
+    # separately — the law is an additive-noise model, and the encoder's clip
+    # is expected to break it at low input SNR.
+    residuals: list[tuple[float, float]] = []
+    for nominal in args.input_snrs:
+        per_stage: dict[str, list[tuple[float, float]]] = {n: [] for n in stage_names}
+        measured_ins: list[float] = []
+        for unit, lambdas in lambdas_by_unit.items():
+            rows: list[StageRow] = []
+            for seed, signal in enumerate(clean_by_unit[unit]):
+                rows.extend(
+                    run_seed(
+                        signal,
+                        seed,
+                        nominal,
+                        layers,
+                        args.tau,
+                        args.target_rate,
+                        label,
+                        unit,
+                    )
+                )
+            all_rows.extend(rows)
+            measured_in = mean_by_stage(rows, "analog_input")
+            measured_ins.append(measured_in)
+            for depth, name in enumerate(stage_names, start=1):
+                predicted = cascade_snr_db(measured_in, lambdas[:depth])
+                measured = mean_by_stage(rows, name)
+                per_stage[name].append((predicted, measured))
+                residuals.append((nominal, measured - predicted))
+
+        for name in stage_names:
+            pairs = per_stage[name]
+            pred = np.mean([p for p, _ in pairs])
+            meas = np.mean([m for _, m in pairs])
+            resid = np.array([m - p for p, m in pairs])
+            print(
+                f"{np.mean(measured_ins):>8.2f} {name:>10} {pred:>10.2f} "
+                f"{meas:>9.2f} {resid.mean():>+9.2f} ±{resid.std():>6.2f}"
+            )
+        print("-" * 58)
+
+    def summarise(label: str, values: list[float]) -> None:
+        if not values:
+            return
+        arr = np.asarray(values)
+        print(
+            f"  {label:<24} n={arr.size:<5} mean {arr.mean():+.3f}   "
+            f"median {np.median(arr):+.3f}   RMS {np.sqrt(np.mean(arr**2)):.3f}   "
+            f"max |.| {np.max(np.abs(arr)):.3f}"
+        )
+
+    print("\nResidual (measured - predicted), dB:\n")
+    summarise("all input SNRs", [d for _, d in residuals])
+    summarise("input SNR >= 10 dB", [d for snr, d in residuals if snr >= 10.0])
+    summarise("input SNR < 10 dB", [d for snr, d in residuals if snr < 10.0])
+    print(
+        "\n  The law is an additive-noise model. The encoder's clip to [0, 1] acts\n"
+        "  as a limiter, compressing noise excursions but not signal, so the model\n"
+        "  is expected to under-predict at low input SNR — and that deviation is\n"
+        "  the regime advantage phase3_findings.md reports."
+    )
+    if skipped:
+        print(f"\nSkipped units: {', '.join(skipped)}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", newline="", encoding="utf-8") as handle:
