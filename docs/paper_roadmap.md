@@ -420,7 +420,9 @@ Run only if M1 shows the ceiling flat under rate control. Instrument information
 - [x] **Produces:** Fig. 4 — information loss per pipeline stage. Names the culprit: **the LIF layer**, retaining ~22% of what reaches it; after two layers the optimal linear readout is 0.01 dB.
 - [ ] Map the ~22% retention figure across firing rate and gain before stating it as a law — currently one operating point.
 - [x] Re-run under training (`epochs > 0`). **Done — STDP does not rescue retention.** The dominant first-layer loss is unchanged (−6.66 → −6.42 → −6.45 dB at 0/10/50 epochs); training degrades the shipped config (1.33 → 1.21 dB) and the best config (3.69 → 1.87 dB); it saturates by 10 epochs. Corroborates `phase3_findings.md` §5.6.2. See `docs/m2_findings.md` §6.
-- [ ] Re-run on real MIT-BIH.
+- [x] Re-run on real MIT-BIH. **Done** — 16 records, shipped config, 20 dB input.
+      Population and linear readouts agree at every stage, so the destruction result holds
+      on real ECG. See `docs/m2_findings.md` §8.
 
 ### M3 — Analytical bound — **RESOLVED: the ceiling is derived**
 
@@ -457,8 +459,15 @@ noise-figure cascade, and it has the algebraic form of Moreno-Bote's
 - [x] **Produces:** Fig. 5 — predicted vs measured, three configurations × six
       input SNRs. Section III theory.
 - [ ] Derive the step from *drive* correlation (0.75, analytic) to *output-error*
-      correlation (0.33, measured). Needs the LIF transfer function linearised
-      about the calibrated operating point. Currently empirical.
+      correlation (0.33 synthetic / 0.19–0.37 real, measured). Needs the LIF transfer
+      function linearised about the calibrated operating point. Currently empirical.
+- [ ] **State the width model in its measured form, not its extrapolated one.** Real data
+      shows `c` drifts with N (0.37 → 0.19 over 16 → 512), so predicting Λ at every width
+      from one width's `c` undershoots by up to 2 dB. Measured Λ matches its *own* width's
+      `N→∞` limit to 0.04 dB, which is the form that survives. See m3_findings §8.5.
+- [ ] **Control the encoder's firing rate across records.** `calibrate_gain` calibrates
+      LIF layers only, so the encoder's rate follows each record's amplitude distribution
+      (15.5–58.8 Hz measured). Confounds any cross-record comparison of encoder Λ.
 
 **Where the law fails is the good news.** Below ~10 dB input it *under*-predicts by
 0.8–2.8 dB — the network beats it. The encoder's clip to `[0,1]` acts as a limiter,
@@ -486,7 +495,9 @@ argument change.
 
 - [ ] Density sweep at fixed fan-in, to separate decorrelation from fan-in growth.
       At rho=0.1, N=32 each neuron sees ~3 inputs; the N>=128 numbers are unaffected.
-- [ ] Confirm on real MIT-BIH, >= 10 seeds, with equivalence tests.
+- [x] Confirm on real MIT-BIH. **Done** — 4 records, both widths, ranking monotone in
+      cosine similarity, `[512,512]` sparse at 5.14 dB vs the shipped default's 1.71 dB.
+      `docs/m3_findings.md` §8.3. **Still owed:** >= 10 seeds and equivalence tests.
 - [ ] Signed-weight variant of `STDPSynapse`. The model says `mu -> 0` gives
       `cos -> 0`, the strongest available intervention; STDP's `[0,1]` bound
       currently forbids it. Scope decision needed — this may be a second paper.
@@ -636,9 +647,12 @@ what is left is power, statistics and writing.
 6. ~~Fix `fetch_raw_runs` and build R2.~~ **Done** — `docs/r2_findings.md`. The
    pseudo-replication is gone (32 groups of 80 → 512 of 5), `rpeak_integrity` is reachable,
    and the paired/TOST/Holm/bootstrap protocol ships as `neuroflux-experiment compare`.
-7. **Raise everything to ≥ 10 seeds and confirm on real MIT-BIH.** M1a, M2 and M3 are
-   all at 3 seeds on synthetic ECG, single 8 s record. This is now the binding
-   credibility risk, not the science.
+7. **Real MIT-BIH — done for M2 and M3.** All 16 Phase 3 records are cached and manifest-
+   verified. The cascade law predicts real patient ECG to **+0.02 ± 0.06 dB at 20 dB input
+   and −0.00 ± 0.02 dB at 40 dB**, n=16 records, zero fitted parameters; the ceiling is
+   1.71 ± 0.76 dB; the correlation mechanism and the sparse intervention (+3.43 dB) both
+   replicate. See `docs/m3_findings.md` §8. **Still owed:** M1a on real data, and ≥ 10
+   seeds throughout (§8.5 records where power is currently uneven).
 8. **Run M4's density sweep** at fixed fan-in — the one open question about the
    intervention, and the intervention is the paper's actionable contribution.
 9. **Re-run Findings 2 and 5 under per-layer rate control.** M3 predicts these will not

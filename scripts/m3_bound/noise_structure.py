@@ -66,7 +66,7 @@ from neuroflux_core import (
     calibrate_gain,
 )
 from neuroflux_core.metrics.cascade import linear_to_db
-from neuroflux_datasets.synthetic import generate_ecg
+from neuroflux_datasets.signals import DEFAULT_CACHE_DIR, load_clean_ecg
 
 FS = 250.0
 DT = 1000.0 / FS
@@ -81,6 +81,7 @@ class NoiseRow:
     """Error structure of one stage at one width."""
 
     width: int
+    unit: str
     stage: str
     order: int
     seed: int
@@ -160,6 +161,9 @@ def capture(
     tau_decode: float,
     target_rate_hz: float,
     encoder_seed: int,
+    dataset: str = "synthetic",
+    unit: str = "synthetic",
+    cache_dir: str = DEFAULT_CACHE_DIR,
 ) -> tuple[np.ndarray, list[np.ndarray]]:
     """
     Run `[width, width]` on a clean ECG and return the clean signal and traces.
@@ -167,7 +171,14 @@ def capture(
     The input is noiseless, so every error measured downstream is manufactured
     by the pipeline rather than inherited from the data.
     """
-    clean = generate_ecg(duration_s=duration_s, fs=FS)
+    clean = load_clean_ecg(
+        dataset,
+        unit,
+        duration_s=duration_s,
+        fs=FS,
+        window=seed,
+        cache_dir=cache_dir,
+    )
     drive = np.tile(clean, (width, 1)).T
     v_min, v_max = float(np.min(drive)), float(np.max(drive))
     if v_max <= v_min:
@@ -215,16 +226,35 @@ def analyse(
     duration_s: float,
     tau_decode: float,
     target_rate_hz: float,
+    dataset: str = "synthetic",
+    unit: str = "synthetic",
+    cache_dir: str = DEFAULT_CACHE_DIR,
 ) -> list[NoiseRow]:
     """Decompose the error structure of every stage at one width."""
     clean, traces_a = capture(
-        width, seed, duration_s, tau_decode, target_rate_hz, encoder_seed=seed
+        width,
+        seed,
+        duration_s,
+        tau_decode,
+        target_rate_hz,
+        encoder_seed=seed,
+        dataset=dataset,
+        unit=unit,
+        cache_dir=cache_dir,
     )
     # Same network, same analog drive, different spike realisation. Error that
     # survives this is a deterministic function of the drive: distortion, not
     # noise, and no amount of averaging removes it.
     _, traces_b = capture(
-        width, seed, duration_s, tau_decode, target_rate_hz, encoder_seed=seed + 500_000
+        width,
+        seed,
+        duration_s,
+        tau_decode,
+        target_rate_hz,
+        encoder_seed=seed + 500_000,
+        dataset=dataset,
+        unit=unit,
+        cache_dir=cache_dir,
     )
 
     rows: list[NoiseRow] = []
@@ -250,6 +280,7 @@ def analyse(
         rows.append(
             NoiseRow(
                 width=width,
+                unit=unit,
                 stage=name,
                 order=order + 1,
                 seed=seed,
@@ -281,6 +312,17 @@ def main() -> None:
         "--widths", type=int, nargs="+", default=[16, 32, 64, 128, 256, 512]
     )
     parser.add_argument(
+        "--dataset", choices=["synthetic", "mit-bih"], default="synthetic"
+    )
+    parser.add_argument(
+        "--records",
+        type=str,
+        nargs="+",
+        default=None,
+        help="MIT-BIH records to average over (default: 214)",
+    )
+    parser.add_argument("--cache-dir", type=str, default=DEFAULT_CACHE_DIR)
+    parser.add_argument(
         "--predict-from",
         type=int,
         default=32,
@@ -293,14 +335,32 @@ def main() -> None:
 
     print(
         f"M3 — error structure   (layers=[N,N], tau={args.tau:.0f}ms, "
-        f"rate={args.target_rate:.0f}Hz, clean input, {args.seeds} seeds)"
+        f"rate={args.target_rate:.0f}Hz, clean input, {args.dataset}, "
+        f"{args.seeds} seeds)"
     )
     print("Lambda is the intrinsic SNR of the stage's population readout.\n")
 
+    units = (
+        (list(args.records) if args.records else ["214"])
+        if args.dataset == "mit-bih"
+        else ["synthetic"]
+    )
     rows: list[NoiseRow] = []
     for width in args.widths:
-        for seed in range(args.seeds):
-            rows.extend(analyse(width, seed, args.duration, args.tau, args.target_rate))
+        for unit in units:
+            for seed in range(args.seeds):
+                rows.extend(
+                    analyse(
+                        width,
+                        seed,
+                        args.duration,
+                        args.tau,
+                        args.target_rate,
+                        dataset=args.dataset,
+                        unit=unit,
+                        cache_dir=args.cache_dir,
+                    )
+                )
 
     for stage in ["encoded", "layer1"]:
         print(f"\n### {stage}\n")

@@ -65,7 +65,7 @@ from neuroflux_core import (
 from neuroflux_core.metrics.cascade import linear_to_db
 from neuroflux_core.metrics.reconstruction import affine_corrected_snr
 from neuroflux_core.network.topology import InitScheme, init_weights
-from neuroflux_datasets.synthetic import generate_ecg
+from neuroflux_datasets.signals import DEFAULT_CACHE_DIR, load_clean_ecg
 
 FS = 250.0
 DT = 1000.0 / FS
@@ -83,6 +83,7 @@ class SchemeRow:
 
     scheme: str
     width: int
+    unit: str
     seed: int
     weight_mean: float
     weight_std: float
@@ -148,10 +149,24 @@ def error_structure(traces: np.ndarray, clean: np.ndarray) -> tuple[float, float
 
 
 def run_scheme(
-    scheme: InitScheme, width: int, seed: int, duration_s: float, tau_decode: float
+    scheme: InitScheme,
+    width: int,
+    seed: int,
+    duration_s: float,
+    tau_decode: float,
+    dataset: str = "synthetic",
+    unit: str = "synthetic",
+    cache_dir: str = DEFAULT_CACHE_DIR,
 ) -> SchemeRow:
     """Build `[width, width]` under one init scheme and measure what it delivers."""
-    clean = generate_ecg(duration_s=duration_s, fs=FS)
+    clean = load_clean_ecg(
+        dataset,
+        unit,
+        duration_s=duration_s,
+        fs=FS,
+        window=seed,
+        cache_dir=cache_dir,
+    )
     drive = np.tile(clean, (width, 1)).T
     v_min, v_max = float(np.min(drive)), float(np.max(drive))
     if v_max <= v_min:
@@ -202,6 +217,7 @@ def run_scheme(
     return SchemeRow(
         scheme=str(scheme),
         width=width,
+        unit=unit,
         seed=seed,
         weight_mean=w_mean,
         weight_std=w_std,
@@ -221,6 +237,17 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=8.0)
     parser.add_argument("--tau", type=float, default=TAU_DECODE)
     parser.add_argument(
+        "--dataset", choices=["synthetic", "mit-bih"], default="synthetic"
+    )
+    parser.add_argument(
+        "--records",
+        type=str,
+        nargs="+",
+        default=None,
+        help="MIT-BIH records to average over (default: 214)",
+    )
+    parser.add_argument("--cache-dir", type=str, default=DEFAULT_CACHE_DIR)
+    parser.add_argument(
         "--out", type=Path, default=Path("results/m3_bound/m3_weight_correlation.csv")
     )
     args = parser.parse_args()
@@ -228,7 +255,7 @@ def main() -> None:
     print("M3 — weight-column cosine similarity sets the shared-noise floor")
     print(
         f"(layers=[{args.width},{args.width}], tau={args.tau:.0f}ms, clean input, "
-        f"{args.seeds} seeds)\n"
+        f"{args.dataset}, {args.seeds} seeds)\n"
     )
 
     # Step 1: pure matrix algebra, no simulation. The 3/4 prediction.
@@ -256,10 +283,25 @@ def main() -> None:
         f"{'SNR out':>9} {'rate Hz':>8}"
     )
     print("-" * 57)
+    units = (
+        (list(args.records) if args.records else ["214"])
+        if args.dataset == "mit-bih"
+        else ["synthetic"]
+    )
     rows: list[SchemeRow] = []
     for scheme in SCHEMES:
         block = [
-            run_scheme(scheme, args.width, seed, args.duration, args.tau)
+            run_scheme(
+                scheme,
+                args.width,
+                seed,
+                args.duration,
+                args.tau,
+                dataset=args.dataset,
+                unit=unit,
+                cache_dir=args.cache_dir,
+            )
+            for unit in units
             for seed in range(args.seeds)
         ]
         rows.extend(block)
