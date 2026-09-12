@@ -133,7 +133,63 @@ Best configuration found: `[512,512]`, tau=20 ms → **3.77 dB**, against the sh
 default's 1.33 dB. So the ceiling is roughly **2.8× higher than the default suggests**, and
 still loses ~80% of a 19.47 dB input.
 
-## 6. Consequences
+## 6. The training control — STDP does not rescue retention
+
+Everything above is passive (`epochs=0`), which invites the obvious objection: *a random
+projection through a threshold is lossy, so what did you expect?* If STDP training improved
+per-layer retention, the whole characterisation would describe untrained networks only.
+
+It does not. Full decomposition at 20 dB input, 3 seeds (`results/m2_bottleneck/m2_train_*.csv`):
+
+**Wide `[128,128,128]`, tau=4 ms** — per-stage output, dB:
+
+| epochs | encoded | layer1 | layer2 | layer1 Δ | layer2 Δ | clipped |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 8.56 | 1.90 | 0.46 | −6.66 | −1.43 | 16.7% |
+| 10 | 8.56 | 2.14 | 1.58 | −6.42 | −0.56 | 0.39% |
+| 50 | 8.56 | 2.11 | 1.54 | −6.45 | −0.57 | 0.39% |
+
+**Shipped `[32,16,8]`, tau=20 ms:**
+
+| epochs | encoded | layer1 | layer2 |
+|---:|---:|---:|---:|
+| 0 | 3.74 | 2.48 | **1.33** |
+| 10 | 3.74 | 2.24 | 1.24 |
+| 50 | 3.74 | 2.02 | **1.21** |
+
+**Best configuration `[512,512]`, tau=20 ms:**
+
+| epochs | encoded | layer1 |
+|---:|---:|---:|
+| 0 | 4.64 | **3.69** |
+| 10 | 4.64 | **1.87** |
+
+Four things follow.
+
+1. **The dominant first-layer loss is unchanged by training.** In the wide configuration it
+   goes −6.66 → −6.42 → −6.45 dB across 0, 10 and 50 epochs — within seed noise. STDP does
+   not learn to preserve signal information through the layer that destroys most of it.
+2. **Where training appears to help, it is escaping a pathology, not learning structure.**
+   The wide/tau=4 ms layer-2 gain (0.46 → 1.58) coincides with the clip fraction collapsing
+   from 16.7% to 0.39%. Training moved the network out of a saturated regime; it did not
+   improve the representation.
+3. **In well-configured networks training actively hurts.** The shipped configuration
+   degrades 1.33 → 1.21 dB, and the best configuration found degrades **3.69 → 1.87 dB**.
+   This independently corroborates `phase3_findings.md` §5.6.2, which found STDP damages
+   R-peak integrity (1.000 → 0.51–0.89) while adding ΔSNR.
+4. **Training saturates by 10 epochs.** Epochs 10 and 50 are indistinguishable everywhere.
+
+The ceiling therefore survives training, and the best result in this entire study is an
+**untrained** network.
+
+> **Caveat on the linear readout at large N.** With 512 features and ~1000 training samples
+> the least-squares fit overfits badly — `[512,512]` at epochs=0 shows train 18.18 dB
+> against test 2.36 dB. At that width the population readout (4.64) is the trustworthy
+> column, and the linear readout should be treated as uninformative rather than as a
+> capacity estimate. The split-half design is what makes this visible; do not quote the
+> train column anywhere.
+
+## 7. Consequences
 
 **For the paper.** The claim is no longer "rate coding has a hard ceiling." It is:
 *in a rate-coded unsupervised-STDP reconstruction pipeline the dominant information sink is
@@ -148,8 +204,8 @@ longer the priority, because the encoder is not what binds. The quantity to deri
 ~22%, and what it depends on.
 
 **Caveats.**
-- Passive networks only. Training is untested here; Finding 2 put it at 0.11–0.44 dB, but
-  that was at fixed global gain.
+- Training is now tested (§6) and does not rescue retention, but only on synthetic ECG at
+  one input SNR.
 - Synthetic ECG, 3 seeds, 20 dB input. Real MIT-BIH and proper power are still owed.
 - The ~22% retention figure is measured at one operating point (tau=4 ms, width 128,
   40 Hz target rate). It should be mapped across firing rate and gain before being stated

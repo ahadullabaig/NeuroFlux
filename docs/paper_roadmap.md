@@ -369,7 +369,8 @@ Run only if M1 shows the ceiling flat under rate control. Instrument information
 - [x] Per-stage SNR proxy: correlate each layer's population rate against the clean signal. **Done — `docs/m2_findings.md`.** Scored two ways (population readout vs optimal linear readout) so information destruction is distinguished from decoder failure.
 - [x] **Produces:** Fig. 4 — information loss per pipeline stage. Names the culprit: **the LIF layer**, retaining ~22% of what reaches it; after two layers the optimal linear readout is 0.01 dB.
 - [ ] Map the ~22% retention figure across firing rate and gain before stating it as a law — currently one operating point.
-- [ ] Re-run under training (`epochs > 0`) and on real MIT-BIH.
+- [x] Re-run under training (`epochs > 0`). **Done — STDP does not rescue retention.** The dominant first-layer loss is unchanged (−6.66 → −6.42 → −6.45 dB at 0/10/50 epochs); training degrades the shipped config (1.33 → 1.21 dB) and the best config (3.69 → 1.87 dB); it saturates by 10 epochs. Corroborates `phase3_findings.md` §5.6.2. See `docs/m2_findings.md` §6.
+- [ ] Re-run on real MIT-BIH.
 
 ### M3 — Analytical bound
 
