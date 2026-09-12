@@ -162,12 +162,7 @@ def _reset_transient_state(sim: Simulator) -> None:
     sim.time = 0.0
     sim.encoder.reset_state()
     sim.decoder.reset_state()
-    for n in sim.network.neurons:
-        n.v.fill(n.config.v_rest)
-        n.refractory_time.fill(0.0)
-    for s in sim.network.synapses:
-        s.trace_pre.fill(0.0)
-        s.trace_post.fill(0.0)
+    sim.network.reset_transient_state()
 
 
 def _compute_convergence_speed(

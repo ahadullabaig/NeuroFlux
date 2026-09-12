@@ -182,7 +182,7 @@ def run_condition(
 
     for _ in range(epochs):
         sim.run(drive, duration_ms=duration_ms, training=True)
-        net.reset_state()
+        net.reset_transient_state()
 
     out_spikes = sim.run(drive, duration_ms=duration_ms, training=False)
     reconstructed = sim.decode(out_spikes)

@@ -126,10 +126,33 @@ class FeedForwardNetwork(BaseNetwork):
         return [n.config.g_syn for n in self.neurons]
 
     def reset_state(self) -> None:
+        """
+        Full reset, including synaptic weights.
+
+        Warning:
+            `STDPSynapse.reset_state` restores `initial_weights_copy`, so this
+            **discards anything the network has learned**. To start a fresh
+            epoch while keeping learned weights, use `reset_transient_state`.
+        """
         for neuron_group in self.neurons:
             neuron_group.reset_state()
         for synapse_matrix in self._synapses:
             synapse_matrix.reset_state()
+
+    def reset_transient_state(self) -> None:
+        """
+        Reset membrane voltages, refractory timers and STDP traces only.
+
+        Synaptic weights are preserved, which is what a training loop wants
+        between epochs. Use this rather than `reset_state` whenever the network
+        has been trained.
+        """
+        for neuron_group in self.neurons:
+            neuron_group.v.fill(neuron_group.config.v_rest)
+            neuron_group.refractory_time.fill(0.0)
+        for synapse_matrix in self._synapses:
+            synapse_matrix.trace_pre.fill(0.0)
+            synapse_matrix.trace_post.fill(0.0)
 
     def step(
         self, input_spikes: np.ndarray, dt: float, training: bool = True
