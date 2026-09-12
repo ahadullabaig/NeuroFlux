@@ -76,9 +76,16 @@ uniform 128-wide layers — localises it:
 | layer2 | 128 | 0.46 ± 0.03 | −1.43 | 0.01 ± 0.01 | 16.31% |
 | layer3 | 128 | 0.37 ± 0.03 | −0.10 | 0.17 ± 0.11 | 16.69% |
 
-**Each LIF layer retains roughly 22% of the information reaching it.** Layer 1 takes 8.56 dB
-down to 1.90; layer 2 takes 1.90 to 0.46; layer 3 adds almost nothing because there is
-almost nothing left. After two LIF layers the **optimal linear readout is 0.01 dB** — no
+> **Corrected by M3 — do not cite the "22%" figure.** The sentence below divided one
+> decibel value by another, which is not a meaningful ratio. On powers the three layers
+> retain 21.6%, 71.8% and 97.9%, not a constant ~22%. The stage-invariant quantity is the
+> intrinsic SNR `Lambda_k`, and the law it obeys is derived in `docs/m3_findings.md` §1–2.
+> Everything else in this section — that the LIF layers are where the loss happens, that
+> both readouts agree, that width is not the cause — stands unchanged.
+
+**~~Each LIF layer retains roughly 22% of the information reaching it.~~** Layer 1 takes
+8.56 dB down to 1.90; layer 2 takes 1.90 to 0.46; layer 3 adds almost nothing because there
+is almost nothing left. After two LIF layers the **optimal linear readout is 0.01 dB** — no
 linear decoder can recover the clean signal from that representation at all.
 
 Three subsidiary findings:
@@ -198,18 +205,20 @@ stages under configuration change, which is why the end-to-end ceiling appears i
 every individual architectural knob.* That is a sharper and better-supported claim, and it
 comes with an actionable design rule (minimise depth).
 
-**For M3.** The target has changed. Deriving the Poisson encoder's capacity bound is no
-longer the priority, because the encoder is not what binds. The quantity to derive is the
-**per-layer information retention of a calibrated LIF population under rate coding** — why
-~22%, and what it depends on.
+**For M3. Done — see `docs/m3_findings.md`.** The target was the per-layer information
+retention of a calibrated LIF population. M3 found that retention is the wrong invariant
+(§1 above), derived the law that replaces it, and traced the bound to the mean pairwise
+error correlation among a layer's neurons — which is fixed at 3/4 by any non-negative
+weight initialisation, before training, independently of synaptic scale.
 
 **Caveats.**
 - Training is now tested (§6) and does not rescue retention, but only on synthetic ECG at
   one input SNR.
 - Synthetic ECG, 3 seeds, 20 dB input. Real MIT-BIH and proper power are still owed.
-- The ~22% retention figure is measured at one operating point (tau=4 ms, width 128,
-  40 Hz target rate). It should be mapped across firing rate and gain before being stated
-  as a law in the manuscript — at present it is a measurement, not a result.
+- ~~The ~22% retention figure is measured at one operating point.~~ Superseded: M3
+  showed the figure was an artifact of dividing decibels, and replaced it with the
+  intrinsic SNR `Lambda_k`, measured across width, tau, depth and four weight
+  initialisations.
 - The linear readout is fit with up to 128 features on ~1000 training samples; the
   train/test gap (e.g. 10.33 vs 8.25 at the encoder) shows mild overfitting, so the test
   column is the one to quote.
