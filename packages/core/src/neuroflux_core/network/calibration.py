@@ -148,3 +148,111 @@ def calibrate_gain(
         network.set_layer_gains(gains)
 
     return gains
+
+
+def expected_encoder_rate_hz(
+    signal: np.ndarray,
+    v_min: float,
+    v_max: float,
+    max_firing_rate_hz: float,
+    dt: float,
+) -> float:
+    """
+    Mean firing rate a `PoissonRateEncoder` will produce on `signal`, exactly.
+
+    Mirrors `PoissonRateEncoder.encode`, including both of its clips: the
+    amplitude clip to `[0, 1]` and the per-step probability clip at 1. The
+    second is what makes a closed-form inverse unsafe — above `1000 / dt` Hz
+    the rate stops responding to `max_firing_rate_hz` at the samples that hit
+    it — so `calibrate_encoder_rate` searches this function instead.
+
+    Args:
+        signal: The analog drive, any shape; every element is one channel-step.
+        v_min: Encoder lower bound.
+        v_max: Encoder upper bound.
+        max_firing_rate_hz: Encoder rate at `v_max`.
+        dt: Time step in ms.
+
+    Returns:
+        Expected spikes per second per channel, averaged over `signal`.
+    """
+    normalized = np.clip(
+        (np.asarray(signal, dtype=np.float64) - v_min) / (v_max - v_min), 0.0, 1.0
+    )
+    p_spike = np.clip(normalized * max_firing_rate_hz * (dt / 1000.0), 0.0, 1.0)
+    return float(np.mean(p_spike) * 1000.0 / dt)
+
+
+def calibrate_encoder_rate(
+    signal: np.ndarray,
+    v_min: float,
+    v_max: float,
+    dt: float,
+    target_rate_hz: float = 40.0,
+    tol_hz: float = 1e-3,
+    max_iter: int = 60,
+) -> float:
+    """
+    The `max_firing_rate_hz` at which an encoder fires at `target_rate_hz` on
+    average over `signal`.
+
+    `calibrate_gain` holds every LIF layer at a target rate but cannot reach
+    the encoder, which has no gain: its rate is fixed by where the signal's
+    amplitude distribution sits between `v_min` and `v_max`. Real ECG is a
+    narrow spike on a long baseline, so that position varies from record to
+    record — on the 16 Phase 3 MIT-BIH records at a fixed 100 Hz ceiling the
+    encoder fired anywhere from 15.6 to 65.2 Hz over 10 seeds
+    (`docs/m3_findings.md` §8.6).
+    Any cross-record comparison of the encoder stage is then a comparison of
+    operating points as much as of signals. Choosing the ceiling per signal
+    removes that.
+
+    Args:
+        signal: The analog drive the encoder will see.
+        v_min: Encoder lower bound.
+        v_max: Encoder upper bound.
+        dt: Time step in ms.
+        target_rate_hz: Desired mean rate per channel.
+        tol_hz: Stop when the expected rate is within this of the target.
+        max_iter: Bisection iterations.
+
+    Returns:
+        The `max_firing_rate_hz` to construct the encoder with.
+
+    Raises:
+        ValueError: If `v_max <= v_min`, if `dt` or `target_rate_hz` is not
+            positive, or if the target is unreachable. The reachable maximum is
+            `1000 / dt` Hz times the fraction of samples above `v_min`: a
+            channel cannot fire more than once per step, and never at `v_min`.
+    """
+    if v_max <= v_min:
+        raise ValueError("v_max must be strictly greater than v_min")
+    if dt <= 0.0:
+        raise ValueError(f"dt must be positive, got {dt}.")
+    if target_rate_hz <= 0.0:
+        raise ValueError(f"target_rate_hz must be positive, got {target_rate_hz}.")
+
+    values = np.asarray(signal, dtype=np.float64)
+    ceiling_hz = float(np.mean(values > v_min)) * 1000.0 / dt
+    if target_rate_hz >= ceiling_hz:
+        raise ValueError(
+            f"target_rate_hz={target_rate_hz} is unreachable: at dt={dt} ms this "
+            f"signal can drive at most {ceiling_hz:.1f} Hz."
+        )
+
+    # The expected rate is continuous and non-decreasing in the ceiling, zero at
+    # zero, and reaches the target by the time every sample saturates.
+    low, high = 0.0, 1000.0 / dt
+    while expected_encoder_rate_hz(values, v_min, v_max, high, dt) < target_rate_hz:
+        high *= 2.0
+
+    for _ in range(max_iter):
+        mid = 0.5 * (low + high)
+        rate = expected_encoder_rate_hz(values, v_min, v_max, mid, dt)
+        if abs(rate - target_rate_hz) < tol_hz:
+            return mid
+        if rate < target_rate_hz:
+            low = mid
+        else:
+            high = mid
+    return 0.5 * (low + high)

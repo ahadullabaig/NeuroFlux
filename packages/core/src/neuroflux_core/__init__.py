@@ -7,7 +7,12 @@ from neuroflux_core.encoders.rate import PoissonRateEncoder
 from neuroflux_core.encoders.temporal import TemporalEncoder
 from neuroflux_core.io.checkpoint import load_checkpoint, save_checkpoint
 from neuroflux_core.io.config import LIFConfig, NetworkConfig, STDPConfig
-from neuroflux_core.network.calibration import calibrate_gain, measure_layer_rates
+from neuroflux_core.network.calibration import (
+    calibrate_encoder_rate,
+    calibrate_gain,
+    expected_encoder_rate_hz,
+    measure_layer_rates,
+)
 from neuroflux_core.network.feedforward import FeedForwardNetwork, Network
 from neuroflux_core.network.simulator import Simulator
 from neuroflux_core.network.topology import init_weights
@@ -26,6 +31,8 @@ __all__ = [
     "init_weights",
     # Calibration
     "calibrate_gain",
+    "calibrate_encoder_rate",
+    "expected_encoder_rate_hz",
     "measure_layer_rates",
     # Neurons & synapses
     "LIFNeuron",
