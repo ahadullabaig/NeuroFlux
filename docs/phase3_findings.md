@@ -12,6 +12,17 @@
 > trade-off *reverses* between 10 and 50 epochs, so the canonical 10-epoch configuration
 > sits near the worst point for R-peak integrity.
 
+> **Every `rpeak_integrity` number in this document is superseded — see `docs/r1_findings.md`.**
+> The metric sets its peak-prominence floor to a fraction of *each signal's own* standard
+> deviation, so it self-normalises against the noise it is meant to penalise. Over a 25 dB
+> change in input noise it moves by **0.000**, scoring the unprocessed noisy signal 1.000 at
+> −5 dB input. It is deprecated in place; `metrics/qrs.py` replaces it with detections scored
+> against the cardiologist `.atr` annotations at the ANSI/AAMI EC57 tolerance, reporting Se,
+> PPV, F1 and RMS timing jitter. **The regime-dependent conclusions below survive** — the QRS
+> F1 reproduces the same crossover at 0–5 dB from an independent reference — but the
+> unconditional "preserves R-peaks perfectly" claim does not. Corrections are inline at §5.6.2.
+> ΔSNR figures are unaffected.
+
 **Source data:** `results/phase3_full_sweep.db` (2,560 rows). Analysis artifacts: `results/phase3_full_sig/significance_results.csv`, `results/phase3_full_sig/failure_modes.csv`, `results/phase3_full_figures/*.png`.
 
 ---
@@ -289,6 +300,32 @@ Per-record range from +1.71 dB (rec 234, prominent QRS) to −0.78 dB (rec 231, 
 
 #### 5.6.2 Untrained baseline — **the most important diagnostic finding**
 
+> **Correction (R1, 2026-09-12).** Every `rpeak_integrity` figure in this
+> section — including the **1.000** column that the section's second finding
+> rests on — is a metric artifact. `rpeak.py:54-62` sets the peak-prominence
+> floor to `0.5 x std` of each signal *independently*, so the detection
+> threshold rises in proportion to the noise it should penalise, and the score
+> compares detections against detections rather than against ground truth.
+> Measured over a 25 dB change in input noise with nothing else altered,
+> `rpeak_integrity` moves by **0.000**: the *unprocessed noisy signal* scores
+> 1.000 at −5 dB input, the same as a clean record. See `docs/r1_findings.md`
+> §2 for the measurement.
+>
+> Re-measured against the cardiologist `.atr` annotations at the ANSI/AAMI
+> EC57 tolerance (`metrics/qrs.py`, 16 records, paired on record, Holm
+> corrected), the *direction* of this section's claim survives but its scope
+> narrows sharply. The passive network beats the do-nothing baseline on QRS F1
+> at **−5 dB (+0.366, p_holm = 0.0003)** and **0 dB (+0.224, p_holm = 0.031)**,
+> and has no detectable effect at 5, 10 or 20 dB. "The passive architecture
+> preserves R-peaks perfectly at every input SNR" is not supported. "Below
+> 0 dB the passive architecture recovers beats that are otherwise
+> undetectable, and above 5 dB it neither helps nor hurts" is — and it matches
+> the ΔSNR regime boundary this document reports elsewhere, from an
+> independent metric with an independent reference.
+>
+> The ΔSNR columns below are unaffected; `calculate_snr` has no such defect.
+
+
 **Source:** `results/phase3_diagnostics/untrained.db` (320 runs with epochs=0).
 
 | Input SNR | Untrained ΔSNR | 10-epoch ΔSNR | 50-epoch ΔSNR | Untrained rpeak | 10-ep rpeak | 50-ep rpeak |
@@ -314,6 +351,13 @@ This is a **substantive revision to the §4 epochs-paradox interpretation.** The
 **Implication for the project's claim:** the "unsupervised STDP-based learning preserves clinical landmarks" framing must be revised. Closer to truth: "passive SNN architecture preserves clinical landmarks; STDP improves global SNR at the cost of landmark fidelity, with the trade favoring STDP at low input SNR and disfavoring it at high input SNR."
 
 This is a more nuanced — and more honest — story.
+
+> **Correction (R1).** Restate once more, with the metric fixed: *below 0 dB
+> the passive architecture recovers QRS complexes that are otherwise
+> undetectable; above 5 dB it neither helps nor hurts; STDP improves global SNR
+> at the cost of landmark fidelity throughout.* The trade-off between the two
+> mechanisms is real and is what this section got right. The unconditional
+> "preserves clinical landmarks" is what it got wrong, and the metric is why.
 
 #### 5.6.3 Network size scaling — **modest improvement available**
 

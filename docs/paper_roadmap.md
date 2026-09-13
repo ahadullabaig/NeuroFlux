@@ -223,7 +223,7 @@ in an unsupervised STDP pipeline, where no reference activation distribution exi
 
 ---
 
-## Stage R1 — Measurement validity
+## Stage R1 — Measurement validity — **RESOLVED**
 
 **Duration:** 1 week
 **Goal:** Make the ceiling measurable without artifacts. This is now the most important stage in the roadmap, because the entire result is a measurement.
@@ -238,17 +238,28 @@ in an unsupervised STDP pipeline, where no reference activation distribution exi
   - `is_degenerate(recon, tol=1e-9)` → true when output std ≈ 0 or fitted gain ≈ 0.
   - Every experiment records `output_std`, `fitted_gain`, `mean_firing_rate_hz` and `silent_neuron_fraction`. The last two already exist in `metrics/spike_stats.py` and are currently unused.
   - **This is not optional.** Findings 3's `0.00 ±0.00` entries would be silently misread as "low ceiling" without it.
-- [ ] **`metrics/distortion.py`** — `prd`, `prd1`, `rmse`, `max_cross_correlation`. Needed for the motivating ECG section to speak the field's vocabulary.
-- [ ] **`metrics/qrs.py`** — replace the saturated `rpeak_integrity`. It returns 1.000 for the unprocessed noisy signal down to −20 dB SNR with 6× flicker, because `rpeak.py:54-62` sets the prominence floor to `0.5 × std` of each signal *independently*, so it self-normalises. Use `neurokit2.ecg_peaks` scored against MIT-BIH `.atr` annotations at ±150 ms (ANSI/AAMI EC57 convention — verify against the standard text); report Se, PPV, F1 and **RMS timing jitter in ms**.
-  - Mark `rpeak_integrity` deprecated in its docstring with a pointer and a one-line reason.
-- [ ] Unit tests for every new metric, including a **saturation test**: each metric must produce materially different scores for the identity baseline versus a genuinely processed signal, across the SNR range, separated by more than the seed-to-seed standard deviation.
+- [x] **`metrics/distortion.py`** — `prd`, `prd1`, `rmse`, `max_cross_correlation` (+ `cross_correlation_peak`, which returns the lag). **Done.** `prd1` is primary; `prd` is baseline-sensitive and improves when a DC offset is added, which is pinned as a test.
+- [x] **`metrics/qrs.py`** — **Done.** `neurokit2.ecg_peaks` (lazily imported, `method` passed through for robustness checks) scored against MIT-BIH `.atr` annotations at ±150 ms, reporting Se, PPV, F1, RMS timing jitter and signed mean offset. Matching is one-to-one and proximity-ordered; a 1 s edge guard keeps the detector's warm-up from scoring as a clinical miss. `extract_annotated_segments` / `load_reference_beats` carry the reference beats onto the resampled time base.
+  - [x] `rpeak_integrity` deprecated in its module and function docstrings, with the reason and the pointer. Not deleted — Phase 3's published numbers are expressed in it.
+- [x] Unit tests for every new metric, including the **saturation test**. **Done** — 32 + 40 tests. The decisive figure is stricter than the criterion as written: over a 25 dB change in input noise on the *identity baseline*, with nothing else altered, `rpeak_integrity` moves by **0.000** while `qrs_f1` moves by 0.638.
+
+### Result
+
+`docs/r1_findings.md`, from `results/r1_metrics/saturation.csv` (16 records × 3 seeds × 5 input SNRs × 4 conditions).
+
+1. **The old metric is a constant function on this domain.** Span 0.000 over −5 → 20 dB input, sd 0.000 across records. Phase 3 §5.6.2's "passive network preserves R-peaks perfectly (1.000)" is the identity baseline's score too.
+2. **Phase 3's regime claim survives, on a clinical metric with human ground truth.** Passive minus identity, paired on record, Holm corrected: **+0.366 F1 at −5 dB (p = 0.0003)**, **+0.224 at 0 dB (p = 0.031)**, no effect at 5/10/20 dB. Same crossover as ΔSNR, independent metric, independent reference.
+3. **New:** M1b's gain calibration collapses QRS F1 to ≈0 at every input SNR while barely moving the SNR metrics. Rate fidelity and landmark preservation are separate objectives here, and the operating point that optimises one destroys the other — the STDP trade-off of §5.6.2, reached from a different direction. **This is R3's second axis.**
+4. Corrections written into `docs/phase3_findings.md` (top banner + §5.6.2, twice) and `docs/r2_findings.md` §3.
 
 ### Acceptance criteria
 
-- Every new metric demonstrably discriminates, proven by the saturation test.
-- No experiment can report a ceiling number without an accompanying degeneracy verdict — enforced in code, not by convention.
-- A short section appended to `docs/phase3_findings.md` recording the `rpeak_integrity` saturation finding and its consequence for §5.6.2.
-- Four CI gates stay green.
+- ~~Every new metric demonstrably discriminates, proven by the saturation test.~~ **Met.**
+- ~~No experiment can report a ceiling number without an accompanying degeneracy verdict~~ **Met** — `is_degenerate` is recorded on every row.
+- ~~A short section appended to `docs/phase3_findings.md`~~ **Met** — top banner plus two inline corrections at §5.6.2.
+- ~~Four CI gates stay green.~~ **Met.**
+
+**Outstanding from R1:** the detector is a dependency of the result and only `neurokit2`'s default method has been run — `pantompkins1985` / `hamilton2002` belong in R5's grid. Three seeds, not ten. See `docs/r1_findings.md` §8.
 
 ---
 
@@ -636,7 +647,7 @@ Run R0 first, and do not defer it.
 
 ## Immediate next actions
 
-**R0, R1, M1a, M1b, M2 and M3 are complete.** The mechanism is derived and validated;
+**R0, R1, R2, M1a, M1b, M2 and M3 are complete.** The mechanism is derived and validated;
 what is left is power, statistics and writing.
 
 1. ~~Run M1a~~ **Done** — the ceiling holds. See `docs/m1a_findings.md`.
@@ -653,15 +664,21 @@ what is left is power, statistics and writing.
    1.71 ± 0.76 dB; the correlation mechanism and the sparse intervention (+3.43 dB) both
    replicate. See `docs/m3_findings.md` §8. **Still owed:** M1a on real data, and ≥ 10
    seeds throughout (§8.5 records where power is currently uneven).
-8. **Run M4's density sweep** at fixed fan-in — the one open question about the
+8. ~~Finish R1 — `metrics/distortion.py` and `metrics/qrs.py`.~~ **Done** — `docs/r1_findings.md`.
+   `rpeak_integrity` moves by 0.000 over a 25 dB change in input noise; annotation-referenced
+   QRS F1 confirms the regime boundary instead (+0.366 at −5 dB, +0.224 at 0 dB, Holm
+   significant; nothing at ≥ 5 dB). Gain calibration collapses F1 to ≈0 — a second axis for
+   R3. **Still owed:** re-run R2's rpeak comparisons on `qrs_f1`, and the detector-method
+   robustness check in R5.
+9. **Run M4's density sweep** at fixed fan-in — the one open question about the
    intervention, and the intervention is the paper's actionable contribution.
-9. **Re-run Findings 2 and 5 under per-layer rate control.** M3 predicts these will not
+10. **Re-run Findings 2 and 5 under per-layer rate control.** M3 predicts these will not
    move (both sweep non-binding stages), which makes it a cheap confirmation of the law
    rather than a risk.
-10. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`,
+11. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`,
     chiefly the npj regression paper and Kanitscheider 2015. Moreno-Bote et al. (2014) is
     now load-bearing for Section III and must be read in full, not from the abstract.
-11. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
+12. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
 
 ---
 

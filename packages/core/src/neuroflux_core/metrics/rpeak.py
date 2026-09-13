@@ -1,5 +1,21 @@
 """R-peak integrity metric for ECG signal evaluation.
 
+.. deprecated::
+   Saturated — do not use for new results. Use
+   :mod:`neuroflux_core.metrics.qrs` instead.
+
+   The prominence floor is set to ``0.5 * std`` of each signal
+   *independently* (lines 54-62 below), so the detection threshold rises with
+   the very noise the score is meant to penalise. The metric therefore returns
+   1.000 for the **unprocessed noisy signal** down to -20 dB input SNR with 6x
+   flicker, and cannot separate a denoised reconstruction from no processing at
+   all. The reference is also circular: it scores detections against
+   detections, never against the cardiologist annotations in the ``.atr`` file.
+
+   Retained because Phase 3's published numbers are expressed in it — see
+   ``docs/phase3_findings.md`` §5.6.2 and §7 — not because it measures
+   anything.
+
 Measures how well an SNN-reconstructed ECG preserves the clinically
 critical R-peak locations of the original signal.  R-peaks are detected
 via ``scipy.signal.find_peaks`` and matched between the clean reference
@@ -17,6 +33,10 @@ def rpeak_integrity(
     tol_ms: float = 50.0,
 ) -> float:
     """Compute the R-peak integrity score between two ECG signals.
+
+    .. deprecated::
+       Saturated; scores the identity baseline 1.000. Use
+       :func:`neuroflux_core.metrics.qrs.qrs_score`. See the module docstring.
 
     Detects R-peaks in both the *clean* reference and the
     *reconstructed* signal, then matches them within a time tolerance.

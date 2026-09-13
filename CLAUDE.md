@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**NeuroFlux** — a Python-based Spiking Neural Network (SNN) framework for adaptive flicker handling in temporal biomedical signals (ECG, EEG, PPG). Two mechanisms work together: the *passive* architecture (LIF membrane filtering + Poisson rate encoding + population decoding) preserves clinical landmarks (R-peaks) across noise regimes; STDP-driven unsupervised learning adds amplitude-domain SNR improvement at low input SNR. No labeled training data required. The original proposal framed this as a single "STDP denoiser" mechanism — Phase 3's real-data findings showed the passive architecture is doing as much work as STDP, and they make different trade-offs. See `docs/phase3_findings.md` for the precise characterization.
+**NeuroFlux** — a Python-based Spiking Neural Network (SNN) framework for adaptive flicker handling in temporal biomedical signals (ECG, EEG, PPG). Two mechanisms work together: the *passive* architecture (LIF membrane filtering + Poisson rate encoding + population decoding) recovers QRS complexes at low input SNR (≤ 0 dB) that are otherwise undetectable; STDP-driven unsupervised learning adds amplitude-domain SNR improvement at low input SNR. No labeled training data required. The original proposal framed this as a single "STDP denoiser" mechanism — Phase 3's real-data findings showed the passive architecture is doing as much work as STDP, and they make different trade-offs. See `docs/phase3_findings.md` for the precise characterization.
 
 **Phases 0–3 are complete.** Next is Phase 4 (baseline comparison framework — `packages/baselines/`). See `PLAN.md` for the full 16-week roadmap and `DETAILS.md` for the full technical specification.
 
-**Phase 3 produced a regime-characterization result, not the absolute-improvement result the original proposal anticipated.** The full sweep + diagnostic experiments are documented in `docs/phase3_findings.md`. Headline: the SNN has a regime-dependent advantage (improves ΔSNR at input SNR ≤ 0 dB, degrades it at higher SNR); the *passive* untrained network already preserves R-peaks perfectly (rpeak=1.000), and STDP training adds ΔSNR but damages rpeak. The canonical positive config (record 214, 50 Hz, 0 dB, 10 epochs, τ=10 ms) is pinned in `tests/datasets/test_phase3_regression.py`. Phase 4 plans (in PLAN.md) are revised to compare per input-SNR class and treat passive vs. trained NeuroFlux as an ablation baseline.
+**Phase 3 produced a regime-characterization result, not the absolute-improvement result the original proposal anticipated.** The full sweep + diagnostic experiments are documented in `docs/phase3_findings.md`. Headline: the SNN has a regime-dependent advantage (improves ΔSNR at input SNR ≤ 0 dB, degrades it at higher SNR); the *passive* untrained network beats the do-nothing baseline on annotation-referenced QRS F1 at ≤ 0 dB and has no effect above 5 dB, and STDP training adds ΔSNR but damages R-peaks. (Phase 3 originally reported "rpeak=1.000 everywhere"; that was a saturated metric — see `docs/r1_findings.md`.) The canonical positive config (record 214, 50 Hz, 0 dB, 10 epochs, τ=10 ms) is pinned in `tests/datasets/test_phase3_regression.py`. Phase 4 plans (in PLAN.md) are revised to compare per input-SNR class and treat passive vs. trained NeuroFlux as an ablation baseline.
 
 **The original "output SNR floor at 10-12 dB" hypothesis was rejected by direct measurement** (`docs/phase3_findings.md` §5.6.1). Running the SNN on a clean signal gives intrinsic output SNR ≈ 0.7 dB, not 10-12. The apparent floor seen in the main sweep is a training-regime effect (noise acts as an implicit regularizer in STDP), not an architectural capacity ceiling. Phase 6 hyperparameter optimization should target the joint (ΔSNR × rpeak) trade-off, **not** "lift the floor" by scaling the output population — `[64, 32, 64]` actually collapses rpeak (see §5.6.3).
 
@@ -147,7 +147,9 @@ analog signal → Encoder → input_spikes (bool[N_in])
 ### Metrics (`metrics/`)
 
 - `calculate_snr(signal_true, signal_pred)` → dB (primary benchmark metric)
-- `rpeak_integrity(clean, reconstructed, fs, tol_ms=50.0)` → float ∈ [0,1] (Phase 3 — clinical ECG R-peak preservation; greedy peak matching via `scipy.signal.find_peaks`)
+- `rpeak_integrity(clean, reconstructed, fs, tol_ms=50.0)` → float ∈ [0,1] — **deprecated, saturated.** Its prominence floor self-normalises to each signal's std, so it scores the unprocessed noisy signal 1.000 at −5 dB. Kept only because Phase 3's published numbers use it. Do not use for new results.
+- `qrs_score(reference_beats, ecg, fs)` → `QrsScore` (Se, PPV, F1, RMS jitter, mean offset) — `metrics/qrs.py`, the replacement. Scores `neurokit2` detections against `.atr` annotations at ±150 ms (EC57). `neurokit2` is lazy-imported and is a dev dependency only. Reference beats come from `neuroflux_datasets.signals.load_reference_beats`.
+- `prd`, `prd1`, `rmse`, `max_cross_correlation` — `metrics/distortion.py`. Report `prd1` (baseline-independent), not `prd`.
 - `winner_take_all(spike_counts)` → int
 - `classification_accuracy(predicted, true)` → float
 - `mean_firing_rate(spike_train, dt)` → Hz per neuron
@@ -218,7 +220,7 @@ Real biomedical dataset integration — MIT-BIH Arrhythmia Database (ECG). Modul
 
 **Phase 3 produced a regime-characterization result.** Full analysis: `docs/phase3_findings.md`. Key facts every contributor should know:
 - The SNN does **not** behave as a broad denoiser on real ECG. Mean ΔSNR is negatively correlated with input SNR (improves at ≤ 0 dB, degrades at ≥ 5 dB).
-- The **passive (untrained, epochs=0) network preserves R-peaks perfectly** (`rpeak_integrity = 1.000`) across all input SNRs. STDP training adds ~3-4 dB of ΔSNR but damages rpeak (to 0.51-0.89 depending on epoch count). This is documented at `docs/phase3_findings.md` §5.6.2 — it's the most important diagnostic finding.
+- The passive (untrained, epochs=0) network's `rpeak_integrity = 1.000` in `docs/phase3_findings.md` §5.6.2 is a **metric artifact** — the identity baseline scores 1.000 too. Re-measured with `metrics/qrs.py` against `.atr` annotations, passive beats do-nothing on QRS F1 at −5 dB (+0.37) and 0 dB (+0.22), with no effect at ≥ 5 dB. STDP training adds ~3-4 dB of ΔSNR but damages R-peaks. M1b's gain calibration collapses QRS F1 to ≈0. See `docs/r1_findings.md`.
 - Phase 4 should treat *passive NeuroFlux* (configs with `training_epochs: [0]`) as its own baseline alongside the classical filters.
 - Phase 4 comparisons must stratify by input SNR class (0, 5, 10, 20 dB) — the regime advantage is not visible in global aggregates.
 
