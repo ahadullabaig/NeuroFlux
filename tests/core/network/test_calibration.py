@@ -12,7 +12,10 @@ from neuroflux_core import (
     LIFConfig,
     Network,
     NetworkConfig,
+    PoissonRateEncoder,
+    calibrate_encoder_rate,
     calibrate_gain,
+    expected_encoder_rate_hz,
     measure_layer_rates,
 )
 from pydantic import ValidationError
@@ -266,3 +269,104 @@ def test_reset_transient_state_clears_neuron_and_trace_state() -> None:
     for synapse in net.synapses:
         np.testing.assert_allclose(synapse.trace_pre, 0.0)
         np.testing.assert_allclose(synapse.trace_post, 0.0)
+
+
+class TestEncoderRateCalibration:
+    """The encoder stage, which `calibrate_gain` cannot reach."""
+
+    DT = 4.0
+
+    @staticmethod
+    def _spiky(baseline_fraction: float, n: int = 5000) -> np.ndarray:
+        """A signal that sits at a low baseline except for occasional peaks."""
+        rng = np.random.default_rng(0)
+        signal = rng.uniform(0.0, 0.1, size=n)
+        peaks = rng.random(n) > baseline_fraction
+        signal[peaks] = rng.uniform(0.5, 1.0, size=int(peaks.sum()))
+        return signal
+
+    def test_the_expected_rate_matches_the_encoder_empirically(self) -> None:
+        signal = self._spiky(0.8)
+        drive = np.tile(signal, (64, 1)).T
+        encoder = PoissonRateEncoder(
+            v_min=0.0, v_max=1.0, max_firing_rate_hz=100.0, rng=np.random.default_rng(1)
+        )
+        spikes = np.stack(
+            [encoder.encode(drive[t], self.DT) for t in range(len(drive))]
+        )
+        empirical = float(spikes.mean()) * 1000.0 / self.DT
+        expected = expected_encoder_rate_hz(signal, 0.0, 1.0, 100.0, self.DT)
+        assert empirical == pytest.approx(expected, rel=0.02)
+
+    def test_the_expected_rate_respects_the_per_step_probability_clip(self) -> None:
+        # At dt = 4 ms a channel cannot exceed 250 Hz, however high the ceiling.
+        signal = np.ones(100)
+        assert expected_encoder_rate_hz(signal, 0.0, 1.0, 10_000.0, self.DT) == (
+            pytest.approx(250.0)
+        )
+
+    @pytest.mark.parametrize("baseline_fraction", [0.5, 0.8, 0.95])
+    def test_calibration_hits_the_target_whatever_the_amplitude_shape(
+        self, baseline_fraction: float
+    ) -> None:
+        signal = self._spiky(baseline_fraction)
+        ceiling = calibrate_encoder_rate(signal, 0.0, 1.0, self.DT, target_rate_hz=40.0)
+        rate = expected_encoder_rate_hz(signal, 0.0, 1.0, ceiling, self.DT)
+        assert rate == pytest.approx(40.0, abs=1e-2)
+
+    def test_a_baseline_heavy_signal_needs_a_higher_ceiling(self) -> None:
+        # The confound this exists to remove: the same ceiling gives different
+        # rates on signals whose amplitude sits in different places.
+        sparse_peaks = calibrate_encoder_rate(self._spiky(0.95), 0.0, 1.0, self.DT)
+        dense_peaks = calibrate_encoder_rate(self._spiky(0.5), 0.0, 1.0, self.DT)
+        assert sparse_peaks > dense_peaks
+
+    def test_calibration_works_past_the_probability_clip(self) -> None:
+        # A target that needs a nominal ceiling above 1000/dt must still land,
+        # which a closed-form inverse would miss.
+        signal = self._spiky(0.95)
+        ceiling = calibrate_encoder_rate(signal, 0.0, 1.0, self.DT, target_rate_hz=40.0)
+        assert ceiling > 250.0
+        assert expected_encoder_rate_hz(signal, 0.0, 1.0, ceiling, self.DT) == (
+            pytest.approx(40.0, abs=1e-2)
+        )
+
+    def test_an_unreachable_target_raises(self) -> None:
+        with pytest.raises(ValueError, match="unreachable"):
+            calibrate_encoder_rate(np.full(100, 0.5), 0.0, 1.0, self.DT, 300.0)
+
+    def test_a_signal_entirely_at_v_min_cannot_fire(self) -> None:
+        with pytest.raises(ValueError, match="unreachable"):
+            calibrate_encoder_rate(np.zeros(100), 0.0, 1.0, self.DT, 1.0)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            ({"v_min": 1.0, "v_max": 1.0}, "strictly greater"),
+            ({"dt": 0.0}, "dt must be positive"),
+            ({"target_rate_hz": 0.0}, "target_rate_hz must be positive"),
+        ],
+    )
+    def test_bad_arguments_raise(self, kwargs: dict[str, float], message: str) -> None:
+        arguments: dict[str, float] = {
+            "v_min": 0.0,
+            "v_max": 1.0,
+            "dt": self.DT,
+            "target_rate_hz": 40.0,
+        }
+        arguments.update(kwargs)
+        with pytest.raises(ValueError, match=message):
+            calibrate_encoder_rate(
+                np.linspace(0.0, 1.0, 100),
+                arguments["v_min"],
+                arguments["v_max"],
+                arguments["dt"],
+                arguments["target_rate_hz"],
+            )
+
+    def test_iteration_exhaustion_returns_the_bracket_midpoint(self) -> None:
+        signal = self._spiky(0.8)
+        ceiling = calibrate_encoder_rate(
+            signal, 0.0, 1.0, self.DT, target_rate_hz=40.0, tol_hz=0.0, max_iter=3
+        )
+        assert ceiling > 0.0
