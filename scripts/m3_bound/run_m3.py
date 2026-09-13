@@ -53,6 +53,7 @@ from neuroflux_core import (
     Network,
     PoissonRateEncoder,
     STDPConfig,
+    calibrate_encoder_rate,
     calibrate_gain,
 )
 from neuroflux_core.metrics.cascade import cascade_snr_db, intrinsic_snr_db
@@ -109,11 +110,15 @@ def smooth_traces(spikes: np.ndarray, dt: float, tau: float) -> np.ndarray:
 
 
 def population_readout(
-    traces: np.ndarray, v_min: float, v_max: float, tau: float
+    traces: np.ndarray,
+    v_min: float,
+    v_max: float,
+    tau: float,
+    max_rate_hz: float = MAX_RATE_HZ,
 ) -> np.ndarray:
     """Replicate `PopulationDecoder.decode` on precomputed traces."""
     rate_hz = traces / (tau / 1000.0)
-    clipped = np.clip(rate_hz / MAX_RATE_HZ, 0.0, 1.0)
+    clipped = np.clip(rate_hz / max_rate_hz, 0.0, 1.0)
     decoded = v_min + clipped * (v_max - v_min)
     return np.asarray(decoded.mean(axis=1))
 
@@ -153,8 +158,16 @@ def run_seed(
     target_rate_hz: float,
     config_label: str,
     unit: str,
+    encoder_rate_hz: float | None = None,
 ) -> list[StageRow]:
-    """Run one seed at one input SNR on one signal, and score every stage."""
+    """
+    Run one seed at one input SNR on one signal, and score every stage.
+
+    `encoder_rate_hz` holds the encoder's mean firing rate at that value by
+    choosing its ceiling for this drive, the way `calibrate_gain` holds each
+    LIF layer. `None` keeps the fixed `MAX_RATE_HZ` ceiling, whose rate then
+    follows the signal's amplitude distribution.
+    """
     rng = np.random.default_rng(seed)
     noisy = (
         clean.copy()
@@ -168,6 +181,14 @@ def run_seed(
     if v_max <= v_min:
         v_max = v_min + 1.0
 
+    encoder_max_hz = (
+        MAX_RATE_HZ
+        if encoder_rate_hz is None
+        else calibrate_encoder_rate(
+            drive, v_min, v_max, DT, target_rate_hz=encoder_rate_hz
+        )
+    )
+
     net = Network.feedforward(
         layers=layers,
         neuron=LIFConfig(),
@@ -178,7 +199,7 @@ def run_seed(
     encoder = PoissonRateEncoder(
         v_min=v_min,
         v_max=v_max,
-        max_firing_rate_hz=MAX_RATE_HZ,
+        max_firing_rate_hz=encoder_max_hz,
         rng=np.random.default_rng(seed),
     )
 
@@ -186,7 +207,7 @@ def run_seed(
     calib_encoder = PoissonRateEncoder(
         v_min=v_min,
         v_max=v_max,
-        max_firing_rate_hz=MAX_RATE_HZ,
+        max_firing_rate_hz=encoder_max_hz,
         rng=np.random.default_rng(seed + 10_000),
     )
     calib_spikes = np.stack(
@@ -229,7 +250,12 @@ def run_seed(
     for idx, name in enumerate(stage_names):
         spikes = np.stack(captured[idx], axis=0)
         traces = smooth_traces(spikes, DT, tau_decode)
-        decoded = population_readout(traces, v_min, v_max, tau_decode)
+        # The encoder stage decodes against its own ceiling; with a calibrated
+        # encoder that ceiling can exceed MAX_RATE_HZ and the readout would clip.
+        readout_max_hz = encoder_max_hz if idx == 0 else MAX_RATE_HZ
+        decoded = population_readout(
+            traces, v_min, v_max, tau_decode, max_rate_hz=readout_max_hz
+        )
         rows.append(
             StageRow(
                 config=config_label,
@@ -261,6 +287,13 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=8.0)
     parser.add_argument("--tau", type=float, default=TAU_DECODE)
     parser.add_argument("--target-rate", type=float, default=TARGET_RATE_HZ)
+    parser.add_argument(
+        "--encoder-rate",
+        type=float,
+        default=None,
+        help="hold the encoder's mean rate at this value (Hz) instead of fixing "
+        "its ceiling at 100 Hz; controls the cross-record encoder confound",
+    )
     parser.add_argument("--layers", type=int, nargs="+", default=[32, 16, 8])
     parser.add_argument(
         "--dataset",
@@ -291,6 +324,8 @@ def main() -> None:
 
     layers = list(args.layers)
     label = f"layers={layers}, tau={args.tau:.0f}ms, rate={args.target_rate:.0f}Hz"
+    if args.encoder_rate is not None:
+        label += f", encoder={args.encoder_rate:.0f}Hz"
     stage_names = ["encoded", *[f"layer{i + 1}" for i in range(len(layers) - 1)]]
 
     if args.dataset == "mit-bih":
@@ -349,6 +384,7 @@ def main() -> None:
                     args.target_rate,
                     label,
                     unit,
+                    args.encoder_rate,
                 )
             )
         all_rows.extend(clean_rows)
@@ -412,6 +448,7 @@ def main() -> None:
                         args.target_rate,
                         label,
                         unit,
+                        args.encoder_rate,
                     )
                 )
             all_rows.extend(rows)
