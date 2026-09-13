@@ -74,6 +74,15 @@ Synthetic sweeps are unaffected by the key change: every Phase 2 row shares
 by `test_synthetic_grouping_is_unchanged`, and the pre-Phase-3 8-column schema still reads
 via a `PRAGMA table_info` fallback.
 
+> **Note (R1).** The `rpeak_integrity` comparisons in this section inherit that
+> metric's saturation defect, documented in `docs/r1_findings.md` §2: the metric
+> does not respond to input noise at all, so a *difference* between two
+> conditions measured in it is a difference in how each condition perturbs a
+> self-normalising detector, not in clinical landmark preservation. The R2
+> protocol applied to it is sound; the quantity it was applied to is not. The
+> ΔSNR results in this section are unaffected. Re-running these comparisons on
+> `metrics/qrs.py` is outstanding.
+
 ## 3. Re-analysis: the Phase 3 claims hold, and get stronger
 
 ### 3.1 Trained vs passive — `phase3_findings.md` §5.6.2

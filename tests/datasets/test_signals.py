@@ -12,6 +12,7 @@ from neuroflux_datasets.signals import (
     DEFAULT_CACHE_DIR,
     PHASE3_RECORDS,
     load_clean_ecg,
+    load_reference_beats,
 )
 
 _CACHED = Path(DEFAULT_CACHE_DIR) / "214.hea"
@@ -86,3 +87,49 @@ def test_window_wraps_rather_than_raising() -> None:
 def test_impossible_window_length_is_rejected() -> None:
     with pytest.raises(ValueError, match="no artifact-free"):
         load_clean_ecg("mit-bih", unit="214", duration_s=100_000.0)
+
+
+class TestReferenceBeats:
+    """Cardiologist beat annotations, carried alongside the window."""
+
+    @requires_records
+    def test_beats_land_inside_the_window(self) -> None:
+        signal, beats = load_reference_beats("214", duration_s=8.0, fs=250.0)
+        assert beats.size > 0
+        assert np.all(beats >= 0)
+        assert np.all(beats < signal.size)
+
+    @requires_records
+    def test_beat_count_is_physiological(self) -> None:
+        # Eight seconds at any plausible heart rate is between 4 and 30 beats.
+        _, beats = load_reference_beats("214", duration_s=8.0, fs=250.0)
+        assert 4 <= beats.size <= 30
+
+    @requires_records
+    def test_the_signal_matches_load_clean_ecg_for_the_same_window(self) -> None:
+        signal, _ = load_reference_beats("214", duration_s=8.0, fs=250.0, window=1)
+        expected = load_clean_ecg("mit-bih", "214", duration_s=8.0, fs=250.0, window=1)
+        np.testing.assert_allclose(signal, expected)
+
+    @requires_records
+    def test_beats_scale_with_the_sampling_rate(self) -> None:
+        _, at_250 = load_reference_beats("214", duration_s=8.0, fs=250.0)
+        _, at_360 = load_reference_beats("214", duration_s=8.0, fs=360.0)
+        assert at_250.size == at_360.size
+        # Same beats, same instants, different time base.
+        np.testing.assert_allclose(at_360 / 360.0, at_250 / 250.0, atol=2.0 / 250.0)
+
+    @requires_records
+    def test_beats_sit_near_a_local_maximum_of_the_signal(self) -> None:
+        # If the index mapping were wrong, annotations would land anywhere.
+        # An R-peak is the largest sample in its own neighbourhood.
+        signal, beats = load_reference_beats("100", duration_s=8.0, fs=250.0)
+        tolerance = 10  # +/- 40 ms at 250 Hz
+        for beat in beats:
+            lo = max(0, int(beat) - tolerance)
+            hi = min(signal.size, int(beat) + tolerance + 1)
+            assert abs(signal[beat]) >= 0.5 * float(np.max(np.abs(signal[lo:hi])))
+
+    def test_an_uncached_record_names_the_fix(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError, match="download_record"):
+            load_reference_beats("999", cache_dir=tmp_path)

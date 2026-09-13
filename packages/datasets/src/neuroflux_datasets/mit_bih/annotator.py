@@ -12,6 +12,7 @@ so that Phase 2 code paths never depend on it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,166 @@ _MITBIH_FS: float = 360.0
 #   '|'  — isolated QRS-like artifact
 #   '+'  — rhythm change (may signal pacing / irregular segments)
 _ARTIFACT_SYMBOLS: frozenset[str] = frozenset({"~", "|", "+"})
+
+# Annotation symbols that mark an actual heartbeat, per the WFDB annotation
+# specification. These are the cardiologist-placed QRS references that
+# `metrics.qrs.match_beats` scores a detector against; everything else in the
+# `.atr` stream is rhythm, quality or measurement bookkeeping.
+_BEAT_SYMBOLS: frozenset[str] = frozenset(
+    {
+        "N",  # normal
+        "L",  # left bundle branch block
+        "R",  # right bundle branch block
+        "B",  # bundle branch block, unspecified
+        "A",  # atrial premature
+        "a",  # aberrated atrial premature
+        "J",  # nodal (junctional) premature
+        "S",  # supraventricular premature
+        "V",  # premature ventricular contraction
+        "r",  # R-on-T premature ventricular contraction
+        "F",  # fusion of ventricular and normal
+        "e",  # atrial escape
+        "j",  # nodal (junctional) escape
+        "n",  # supraventricular escape
+        "E",  # ventricular escape
+        "/",  # paced
+        "f",  # fusion of paced and normal
+        "Q",  # unclassifiable
+        "?",  # unclassified during learning
+    }
+)
+
+
+@dataclass(frozen=True)
+class AnnotatedSegment:
+    """One artifact-free window with its cardiologist beat annotations.
+
+    Attributes:
+        signal: The resampled, normalised window at the target rate.
+        beats: Beat positions in samples, relative to the window start and on
+            `signal`'s time base. These come from the `.atr` file, not from a
+            detector — which is the whole point of carrying them: scoring
+            detections against detections measures only whether two runs of the
+            same algorithm agree. See `neuroflux_core.metrics.qrs`.
+        start_sample: Window start in the record's own samples, at the record's
+            native rate. Kept so a window can be traced back to the record.
+    """
+
+    signal: np.ndarray
+    beats: np.ndarray
+    start_sample: int
+
+
+def extract_annotated_segments(
+    record_id: str,
+    cache_dir: str | Path,
+    duration_s: float,
+    fs: float = 250.0,
+    *,
+    channel: int = 0,
+) -> list[AnnotatedSegment]:
+    """Extract artifact-free windows from a cached MIT-BIH record, with beats.
+
+    Identical window selection to :func:`extract_clean_segments`, which now
+    delegates here. The difference is that each window keeps the reference beat
+    positions from its `.atr` file, mapped onto the resampled time base, so a
+    QRS detector can be scored against the cardiologist rather than against
+    another run of itself.
+
+    Args:
+        record_id: MIT-BIH record identifier (e.g. ``"100"``).
+        cache_dir: Directory containing the cached ``.hea`` / ``.dat`` /
+            ``.atr`` files (as written by :func:`downloader.download_record`).
+        duration_s: Desired segment length in seconds.
+        fs: Target sampling frequency after resampling (default 250 Hz,
+            matching the Phase 2 ``SignalGenerator``).
+        channel: Which signal channel to extract (default ``0`` = MLII).
+
+    Returns:
+        List of :class:`AnnotatedSegment`. May be empty if the record contains
+        no artifact-free window of the requested duration.
+
+    Note:
+        Beat positions are rescaled by ``fs / record_fs`` and rounded, so they
+        carry up to half a sample of quantisation error — 2 ms at 250 Hz,
+        negligible against the 150 ms EC57 matching tolerance but worth knowing
+        when reading RMS jitter figures at the same scale.
+    """
+    import wfdb  # type: ignore[import-untyped]  # noqa: PLC0415
+
+    cache_path = Path(cache_dir)
+    record_path = str(cache_path / record_id)
+
+    # Read the full record in physical units (mV).
+    record = wfdb.rdrecord(record_path, channels=[channel])
+    sig: np.ndarray = record.p_signal[:, 0]  # (n_samples,)
+    record_fs: float = float(record.fs)
+
+    # Read beat annotations.
+    ann = wfdb.rdann(record_path, "atr")
+    ann_samples: np.ndarray = np.asarray(ann.sample)
+    ann_symbols: list[str] = list(ann.symbol)
+
+    # Number of samples per segment at the *native* rate.
+    window_samples = int(duration_s * record_fs)
+
+    if window_samples <= 0 or window_samples > len(sig):
+        return []
+
+    # Build sorted arrays of artifact and beat sample indices for fast lookup.
+    artifact_positions = np.array(
+        [
+            s
+            for s, sym in zip(ann_samples, ann_symbols, strict=True)
+            if sym in _ARTIFACT_SYMBOLS
+        ],
+        dtype=np.int64,
+    )
+    beat_positions = np.array(
+        [
+            s
+            for s, sym in zip(ann_samples, ann_symbols, strict=True)
+            if sym in _BEAT_SYMBOLS
+        ],
+        dtype=np.int64,
+    )
+
+    segments: list[AnnotatedSegment] = []
+
+    # Slide through the record by non-overlapping windows.
+    start = 0
+    while start + window_samples <= len(sig):
+        end = start + window_samples
+
+        # Check for artifact annotations inside [start, end).
+        if len(artifact_positions) > 0:
+            in_window = (artifact_positions >= start) & (artifact_positions < end)
+            if np.any(in_window):
+                # Skip to just past the last artifact in this window.
+                last_artifact = int(artifact_positions[in_window][-1])
+                start = last_artifact + 1
+                continue
+
+        # Extract, resample, and normalize the clean window.
+        raw_segment = sig[start:end].copy()
+        resampled = resample_signal(raw_segment, fs_in=record_fs, fs_out=fs)
+        normalized = normalize(resampled)
+
+        # Map beat annotations onto the resampled window's time base.
+        in_window_beats = beat_positions[
+            (beat_positions >= start) & (beat_positions < end)
+        ]
+        scaled = np.round((in_window_beats - start) * (fs / record_fs)).astype(np.int64)
+        beats = scaled[(scaled >= 0) & (scaled < len(normalized))]
+
+        segments.append(
+            AnnotatedSegment(signal=normalized, beats=beats, start_sample=start)
+        )
+
+        # Advance past this window (non-overlapping).
+        start = end
+
+    return segments
 
 
 def extract_clean_segments(
@@ -58,64 +219,18 @@ def extract_clean_segments(
         List of 1-D ``float64`` arrays, each of length
         ``int(duration_s * fs)`` samples. May be empty if the record
         contains no artifact-free window of the requested duration.
+
+    Note:
+        Use :func:`extract_annotated_segments` when the reference beat
+        positions are needed — for anything scored with
+        ``neuroflux_core.metrics.qrs``, they are.
     """
-    import wfdb  # type: ignore[import-untyped]  # noqa: PLC0415
-
-    cache_path = Path(cache_dir)
-    record_path = str(cache_path / record_id)
-
-    # Read the full record in physical units (mV).
-    record = wfdb.rdrecord(record_path, channels=[channel])
-    sig: np.ndarray = record.p_signal[:, 0]  # (n_samples,)
-    record_fs: float = float(record.fs)
-
-    # Read beat annotations.
-    ann = wfdb.rdann(record_path, "atr")
-    ann_samples: np.ndarray = np.asarray(ann.sample)
-    ann_symbols: list[str] = list(ann.symbol)
-
-    # Number of samples per segment at the *native* rate.
-    window_samples = int(duration_s * record_fs)
-
-    if window_samples <= 0 or window_samples > len(sig):
-        return []
-
-    # Build a sorted array of artifact sample indices for fast lookup.
-    artifact_positions = np.array(
-        [
-            s
-            for s, sym in zip(ann_samples, ann_symbols, strict=True)
-            if sym in _ARTIFACT_SYMBOLS
-        ],
-        dtype=np.int64,
-    )
-
-    segments: list[np.ndarray] = []
-
-    # Slide through the record by non-overlapping windows.
-    start = 0
-    while start + window_samples <= len(sig):
-        end = start + window_samples
-
-        # Check for artifact annotations inside [start, end).
-        if len(artifact_positions) > 0:
-            in_window = (artifact_positions >= start) & (artifact_positions < end)
-            if np.any(in_window):
-                # Skip to just past the last artifact in this window.
-                last_artifact = int(artifact_positions[in_window][-1])
-                start = last_artifact + 1
-                continue
-
-        # Extract, resample, and normalize the clean window.
-        raw_segment = sig[start:end].copy()
-        resampled = resample_signal(raw_segment, fs_in=record_fs, fs_out=fs)
-        normalized = normalize(resampled)
-        segments.append(normalized)
-
-        # Advance past this window (non-overlapping).
-        start = end
-
-    return segments
+    return [
+        segment.signal
+        for segment in extract_annotated_segments(
+            record_id, cache_dir, duration_s, fs=fs, channel=channel
+        )
+    ]
 
 
 def make_pair(

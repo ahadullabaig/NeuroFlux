@@ -17,6 +17,7 @@ dev = [
     "mypy>=1.9.0",
     "mlflow>=2.11.0",
     "types-PyYAML>=6.0.0",
+    "neurokit2>=0.2.7",
 ]
 
 [tool.ruff]

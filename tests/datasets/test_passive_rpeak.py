@@ -1,5 +1,15 @@
 """Passive (untrained) R-peak preservation regression.
 
+.. warning::
+   This test guards far less than its description below claims. It is scored
+   with ``rpeak_integrity``, which R1 found to be saturated: the metric moves by
+   0.000 across a 25 dB change in input noise and scores the *unprocessed*
+   noisy signal 1.000 (``docs/r1_findings.md`` §2). A passing result here says
+   the pipeline still runs, not that R-peaks are preserved. The finding it was
+   written to pin has been re-measured against ``.atr`` annotations with
+   ``metrics/qrs.py`` and holds only at input SNR <= 0 dB. Kept as a smoke test
+   of the ``epochs=0`` path until a QRS-scored regression replaces it.
+
 Pins one of the load-bearing Phase 3 diagnostic findings — that the
 *passive* SNN pipeline (no STDP learning) preserves R-peak landmarks
 with very high fidelity by virtue of:

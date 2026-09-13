@@ -9,7 +9,11 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from neuroflux_core.metrics.snr import calculate_snr
-from neuroflux_datasets.mit_bih.annotator import extract_clean_segments, make_pair
+from neuroflux_datasets.mit_bih.annotator import (
+    extract_annotated_segments,
+    extract_clean_segments,
+    make_pair,
+)
 
 # -----------------------------------------------------------------------
 # extract_clean_segments
@@ -327,3 +331,83 @@ class TestMakePair:
         assert clean.ndim == 1
         assert noisy.ndim == 1
         assert clean.dtype == np.float64
+
+
+# -----------------------------------------------------------------------
+# extract_annotated_segments
+# -----------------------------------------------------------------------
+
+
+class TestExtractAnnotatedSegments:
+    """Beat annotations travel with the window they belong to.
+
+    The mocked record carries one 'N' beat per second at 360 Hz, so a window
+    of `duration_s` seconds resampled to 250 Hz must hold that many beats at
+    250-sample spacing. Anything else means the index rescaling is wrong,
+    which would silently corrupt every QRS score computed from it.
+    """
+
+    def test_the_signal_is_identical_to_the_plain_extractor(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann: MagicMock,
+    ) -> None:
+        plain = extract_clean_segments("100", tmp_path, duration_s=5.0)
+        annotated = extract_annotated_segments("100", tmp_path, duration_s=5.0)
+        assert len(plain) == len(annotated)
+        for expected, segment in zip(plain, annotated, strict=True):
+            np.testing.assert_array_equal(expected, segment.signal)
+
+    def test_beats_land_inside_the_window(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann: MagicMock,
+    ) -> None:
+        for segment in extract_annotated_segments("100", tmp_path, duration_s=5.0):
+            assert np.all(segment.beats >= 0)
+            assert np.all(segment.beats < segment.signal.size)
+
+    def test_one_beat_per_second_survives_the_resample(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann_clean: MagicMock,
+    ) -> None:
+        segments = extract_annotated_segments("100", tmp_path, duration_s=5.0, fs=250.0)
+        # Five seconds, one beat per second, at 250 Hz.
+        assert segments[0].beats.size == 5
+        np.testing.assert_array_equal(
+            segments[0].beats, np.array([0, 250, 500, 750, 1000])
+        )
+
+    def test_the_artifact_symbol_is_not_counted_as_a_beat(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann: MagicMock,
+    ) -> None:
+        # '~' sits at 25 s; every window containing it is excluded outright,
+        # so no returned window may contain a beat derived from it.
+        with_artifact = extract_annotated_segments("100", tmp_path, duration_s=5.0)
+        clean_counts = {segment.beats.size for segment in with_artifact}
+        assert clean_counts == {5}
+
+    def test_the_start_sample_is_recorded_at_the_native_rate(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann_clean: MagicMock,
+    ) -> None:
+        segments = extract_annotated_segments("100", tmp_path, duration_s=5.0, fs=250.0)
+        # Non-overlapping 5 s windows at the record's own 360 Hz.
+        assert [segment.start_sample for segment in segments[:3]] == [0, 1800, 3600]
+
+    def test_a_record_shorter_than_the_window_gives_nothing(
+        self,
+        tmp_path: Path,
+        mock_rdrecord: MagicMock,
+        mock_rdann: MagicMock,
+    ) -> None:
+        assert extract_annotated_segments("100", tmp_path, duration_s=600.0) == []
