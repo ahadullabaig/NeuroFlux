@@ -85,6 +85,10 @@ via a `PRAGMA table_info` fallback.
 
 ## 3. Re-analysis: the Phase 3 claims hold, and get stronger
 
+> **Superseded for R-peaks by §5.** The `rpeak_integrity` rows below are internally correct
+> applications of the protocol to a metric that R1 showed does not measure R-peak preservation.
+> On QRS F1 the sign of both R-peak results reverses. The ΔSNR rows stand.
+
 ### 3.1 Trained vs passive — `phase3_findings.md` §5.6.2
 
 n = 16 records per stratum, paired on (record, input SNR), flicker 50 Hz, tau 20 ms.
@@ -142,3 +146,102 @@ merely fail to reject.
   results. They are recorded in `scripts/r2_reanalysis/phase3_reanalysis.py:MARGINS`.
 - Wilcoxon at n=16 has limited power; the bootstrap CIs are the more informative column and
   should lead in the manuscript tables.
+
+---
+
+## 5. Re-run on QRS F1: both R-peak conclusions reverse
+
+**Source:** `results/r2_reanalysis/qrs_rescore.db` — 16 records × 5 input SNRs (−5 to 20 dB)
+× {0, 10, 50} epochs × 10 seeds, flicker 50 Hz, τ 20 ms, all in one database from one config
+(`configs/r2/qrs_rescore.yaml`). The runner now records annotation-referenced QRS scores next to
+the old columns, so every row carries both. Analysis: `scripts/r2_reanalysis/qrs_reanalysis.py`
+→ `results/r2_reanalysis/qrs_reanalysis.csv`. Margins fixed before the results were read:
+0.5 dB for ΔSNR, 0.05 for F1/Se/PPV and for `rpeak_integrity`, 10 ms for timing jitter.
+
+This also closes §4's first caveat: the untrained arm now covers every input SNR in the slice,
+at 10 seeds rather than 5.
+
+### 5.1 The two metrics disagree in sign
+
+Median paired difference across 16 records, Holm-corrected within each family; every cell in
+this table is `different` (significant, and outside the margin) unless marked.
+
+| comparison | input SNR | ΔSNR (dB) | `rpeak_integrity` | **QRS F1** |
+|---|---|---|---|---|
+| 10 ep − passive | −5 | +5.75 | −0.445 | **+0.341** |
+| | 0 | +4.77 | −0.526 | **+0.532** |
+| | 5 | +3.97 | −0.612 | **+0.574** |
+| | 10 | +3.57 | −0.653 | **+0.667** |
+| | 20 | +3.21 | −0.636 | **+0.657** |
+| 50 ep − 10 ep | −5 | −2.07 | +0.283 | **−0.055** |
+| | 0 | −1.58 | +0.293 | **−0.141** |
+| | 5 | −0.53 (inconclusive) | +0.284 | −0.128 (inconclusive) |
+| | 10 | −0.14 (equivalent) | +0.267 | −0.041 (inconclusive) |
+| | 20 | +0.02 (equivalent) | +0.223 | −0.025 (inconclusive) |
+
+**"STDP destroys R-peak preservation" (Phase 3 §5.6.2) is false.** Ten epochs of training
+*raise* QRS F1 over the passive network by +0.34 to +0.67 at every input SNR. The same runs'
+`rpeak_integrity` reports a drop of −0.45 to −0.65. Sensitivity rises +0.45 to +0.72, PPV rises
+at every SNR from 0 dB up (+0.21 to +0.61; inconclusive at −5 dB), and RMS timing jitter falls
+by 38–63 ms.
+
+**§3's "reversal" is also reversed.** §3 found that 50 epochs recovers R-peak integrity relative
+to 10 and concluded the canonical 10-epoch configuration "sits near the worst point for R-peak
+integrity". On F1 it sits near the *best*: 50 epochs is worse than 10 at −5 and 0 dB, with PPV
+lower at −5 to 5 dB (−0.07 to −0.17) and jitter higher by 6–18 ms at every SNR. Beyond 10
+epochs, more training costs landmark fidelity *and* low-SNR ΔSNR.
+
+### 5.2 Absolute values
+
+Per-record means, then mean across the 16 records.
+
+| SNR | epochs | ΔSNR (dB) | `rpeak_integrity` | QRS F1 | Se | PPV | jitter (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| −5 | 0 | −0.58 | 1.000 | 0.220 | 0.193 | 0.355 | 89.4 |
+| −5 | 10 | +5.12 | 0.533 | **0.481** | 0.553 | 0.450 | 59.6 |
+| −5 | 50 | +3.04 | 0.836 | 0.433 | 0.506 | 0.386 | 67.8 |
+| 0 | 0 | −3.50 | 1.000 | 0.177 | 0.161 | 0.293 | 86.2 |
+| 0 | 10 | +1.34 | 0.484 | **0.572** | 0.631 | 0.550 | 47.0 |
+| 0 | 50 | −0.16 | 0.823 | 0.457 | 0.546 | 0.403 | 58.9 |
+| 5 | 0 | −6.57 | 1.000 | 0.149 | 0.143 | 0.240 | 87.3 |
+| 5 | 10 | −2.53 | 0.430 | **0.637** | 0.658 | 0.661 | 29.3 |
+| 5 | 50 | −2.98 | 0.765 | 0.549 | 0.643 | 0.491 | 50.8 |
+| 10 | 0 | −9.10 | 1.000 | 0.126 | 0.128 | 0.179 | 82.4 |
+| 10 | 10 | −5.53 | 0.401 | **0.647** | 0.660 | 0.667 | 23.7 |
+| 10 | 50 | −5.69 | 0.682 | 0.613 | 0.667 | 0.589 | 42.5 |
+| 20 | 0 | −11.26 | 0.999 | 0.133 | 0.130 | 0.204 | 83.4 |
+| 20 | 10 | −7.92 | 0.394 | **0.657** | 0.664 | 0.693 | 27.8 |
+| 20 | 50 | −7.98 | 0.647 | 0.628 | 0.680 | 0.609 | 36.3 |
+
+At every input SNR, `rpeak_integrity` ranks the three networks in **exactly the reverse order**
+of F1. The code says why. Its score is `matched / len(clean_peaks)` (`rpeak.py`) — recall only,
+with no penalty for extra detections — and its prominence floor is a fraction of the output's own
+standard deviation. A densely firing output (the passive network) is full of small local maxima,
+one of which lands within 50 ms of almost every clean beat, so it scores perfectly while the
+annotation-referenced detector finds nothing usable in it. A sparse output (the trained network)
+has few maxima, misses some beats outright, and is penalised — even though its peaks are the
+real ones.
+
+### 5.3 Against doing nothing
+
+`scripts/r2_reanalysis/identity_baseline.py` scores the unprocessed input on the same windows
+and noise draws, so each network can be paired against no processing. Full table in
+`docs/r1_findings.md` §4.1. In brief: the passive network helps at −5 dB (+0.12) and destroys
+recoverability at ≥ 5 dB (−0.55 to −0.76); the 10-epoch network helps at −5 and 0 dB (+0.41,
++0.36) and has no detectable effect above.
+
+### 5.4 Consequences
+
+- **There is no ΔSNR-versus-landmark trade-off in STDP.** Ten epochs dominates the passive
+  network on both axes at every input SNR. The trade-off Phase 3 described was the saturated
+  metric's rendering of a different effect: landmark recoverability depends on how sparsely the
+  output fires (`docs/r1_findings.md` §5), and STDP from uniform initialisation moves the
+  network into the sparse regime by depressing its weights.
+- **Phase 4 and Phase 6 guidance must change.** "Target the joint (ΔSNR × rpeak) trade-off"
+  optimises against a metric with the wrong sign. The joint target is (ΔSNR, QRS F1), and on
+  current evidence it is not a trade-off at all over epochs.
+- **The canonical 10-epoch configuration is well chosen**, for the opposite reason to the one
+  §3 would have given.
+- **Caveat.** Jitter comparisons against the passive network pair fewer than 16 records at
+  ≥ 0 dB (11–14), because the passive output often yields no matched beat at all and so no
+  jitter to average. That missingness is itself the finding, but those rows carry less weight.

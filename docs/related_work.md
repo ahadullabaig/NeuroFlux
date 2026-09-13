@@ -20,10 +20,13 @@ says "every one opened and read"; that is **not yet true**, and the marks say wh
 | **[abs]** | Publisher page / abstract read directly. Bibliographic data verified. Body not read. |
 | **[meta]** | Known only from search results. **Must be opened before citing.** |
 
-**10 read, 6 abs, 15 meta.** The roadmap's "≥ 20 entries, every one opened and read" criterion is
-met on count (31 ≥ 20) but **not** on depth: 15 entries are still search-level only. None of those
-15 is load-bearing for the two verdicts below — every claim in Verdict 1 and Verdict 2 rests on a
-**[read]** or **[abs]** source. The residual reads are listed at the end of this document.
+**13 read, 7 abs, 13 meta** (one of them, D4, bibliographically verified but unopened). The
+roadmap's "≥ 20 entries, every one opened and read" criterion is met on count (33 ≥ 20) and on
+depth for **20** entries; 13 are still search-level only. None of those 13 is load-bearing for
+the two verdicts below — every claim in Verdict 1 and Verdict 2 rests on a **[read]** or **[abs]**
+source. `[read]` entries added in the second pass (A2, D5, D6) were obtained as full text and read
+through targeted extraction, with the quoted passages checked verbatim; two paraphrases that failed
+that check were dropped rather than cited. The residual reads are listed at the end of this document.
 
 ---
 
@@ -125,22 +128,42 @@ form and the 1/ε ceiling; the "finite information in the world ⇒ saturation" 
 shared-input intuition that explains our tiled-input result.
 
 **A2. Kanitscheider, I., Coen-Cagli, R., Pouget, A. (2015). Origin of information-limiting noise
-correlations. *PNAS* 112(50), E6973–E6982.** **[abs]** (publisher 403s; abstract verified)
+correlations. *PNAS* 112(50), E6973–E6982. doi:10.1073/pnas.1508738112, PMC4687541.** **[read]**
+(full text via PMC; the passages below were extracted and checked verbatim — two paraphrased
+claims that did not survive the verbatim check are deliberately omitted)
 Locates the origin of information-limiting correlations in noise injected at the sensory
-periphery and propagated forward, with overlap in linearised receptive fields setting correlation
-magnitude. Cite for: our noise is injected at the input and propagated, which is precisely this
-regime. **Needs opening before citing in detail.**
+periphery and propagated through feedforward processing. Verbatim, their Eq. 4 gives the
+correlation between two neurons as `ρ_ij = σ₀²[F_i·F_j]₊ / √((σ₀²|F_i|² + f_i)(σ₀²|F_j|² + f_j))`,
+and: *"From expression [4] we see that the correlations between the neurons will be proportional
+to the overlap of their filters F_i and F_j."* Information preserved through a linear filter
+stage is `FI_neural = FI_input cos²(α)`. They also state: *"In a model without peripheral noise,
+internal fluctuations do not limit asymptotic information."*
 
-**A3. "Information-Limiting Correlations in Large Neural Populations." *Journal of Neuroscience*
-40(8), 1668 (2020). PMID 31941667.** **[meta]**
-Extends the saturation analysis to large populations; the search-level summary states information
-grows linearly or superlinearly at zero/negative correlation but saturates to a finite value for
-positive correlation, and that saturation can disappear under heterogeneous tuning. **Author list
-not verified — open before citing.** The heterogeneous-tuning escape clause is directly relevant
-to R5's non-tiled delay-line embedding experiment.
+**Why this is load-bearing for M3/M4.** Their filter overlap `F_i·F_j` normalised by the filter
+norms is, term for term, the weight-column cosine M3 derived (`docs/m3_findings.md` §5). Applied
+stage by stage, their framework *is* the cascade law: every stage's stochasticity — Poisson
+encoding, LIF spiking — is peripheral noise from the point of view of the stage after it, and
+overlap in that next stage's weights turns it into shared noise. Cite for: the correlation-overlap
+relation (as the established form of our cosine result); input-origin noise as the source of
+saturation. **Care in R6:** their saturation is of *input* information and no connectivity can
+lift it — our 1/SNR_in term. M4's decorrelation reduces the *intrinsic* 1/Λ terms, which is the
+"suboptimal connectivity" loss they distinguish from the asymptotic limit. The paper must not
+claim decorrelation raises information above the input's; it raises how much of it survives.
 
-**A4. "Information-Limiting Correlations in Neural Populations: The Devil Is in the Details."
-PMC7548692.** **[read]**
+**A3. Bartolo, R., Saunders, R.C., Mitz, A.R., Averbeck, B.B. (2020). Information-Limiting
+Correlations in Large Neural Populations. *Journal of Neuroscience* 40(8), 1668–1678.
+PMID 31941667.** **[abs]** (author list and abstract verified)
+**Corrected:** the earlier search-level summary described this as a theory paper with a
+heterogeneous-tuning escape clause. It is an *empirical* study — eight Utah arrays, >500 neurons
+recorded simultaneously in macaque prefrontal cortex. Information about saccades scaled strongly
+sublinearly with ensemble size, and became linear once trial shuffling destroyed noise
+correlations. Cite for: saturation observed directly in a large recorded population, and the
+shuffle control as the empirical counterpart of our `c = 0` extrapolation in M3 §4. The
+heterogeneous-tuning claim is withdrawn — it had no verified source.
+
+**A4. Rafeh, R., Gupta, N. (2020). Information-Limiting Correlations in Neural Populations: The
+Devil Is in the Details. *Journal of Neuroscience* 40(41), 7782–7784. PMC7548692.** **[read]**
+(Journal Club commentary on A3; author list now verified)
 Read in full; gives the phenomenon qualitatively ("correlated noise thus places an upper bound on
 the stimulus information") but **no closed-form saturation condition and no DPI framing**. Useful
 as a caution that the details matter; not a source for equations. Author list not verified.
@@ -180,8 +203,9 @@ Deterministic threshold-based (not Poisson) encoding of continuous signals with 
 reconstruction. Cite as: the contrasting design point — deterministic encoders reconstruct
 continuous signals well, which sharpens the question of why the stochastic Poisson path does not.
 
-**B4. Auge, D., et al. (2021). A Survey of Encoding Techniques for Signal Processing in Spiking
-Neural Networks. *Neural Processing Letters*.** **[abs]**
+**B4. Auge, D., Hille, J., Mueller, E., Knoll, A. (2021). A Survey of Encoding Techniques for
+Signal Processing in Spiking Neural Networks. *Neural Processing Letters* 53(6), 4693–4710.
+doi:10.1007/s11063-021-10562-2.** **[abs]** (author list verified)
 Standard survey reference for encoder taxonomy. Contains the useful framing that "when encoding an
 analog number, there is a remaining reconstruction error due to the discretised number of spikes
 during a given time interval." Author list beyond first author not verified.
@@ -210,8 +234,9 @@ Robust percentile normalisation, λ set to the p-th percentile of layer activity
 99.999]; 12.18% CIFAR-10 error at the 99.9th percentile. Cite for: the mature form of
 rate-calibration practice.
 
-**C3. Zheng, H., et al. (2021). Going Deeper With Directly-Trained Larger Spiking Neural Networks.
-*AAAI* 35(12), 11062–11070.** **[abs]**
+**C3. Zheng, H., Wu, Y., Deng, L., Hu, Y., Li, G. (2021). Going Deeper With Directly-Trained Larger
+Spiking Neural Networks. *AAAI* 35(12), 11062–11070. doi:10.1609/aaai.v35i12.17320.** **[abs]**
+(author list verified)
 tdBN — normalises pre-activations to `N(0, (αV_th)²)` across both temporal and spatial dimensions
 to hold firing rates reasonable. Cite for: normalisation is standard in *directly trained* SNNs
 too, not just converted ones. Full author list not verified.
@@ -251,10 +276,37 @@ and time-series cases are the gap.
 — temporal-coding autoencoder; supports the pattern that reconstruction work chooses temporal
 coding.
 
-**D4. Spiking neural networks for nonlinear regression of complex transient signals on sustainable
-neuromorphic processors. *npj Unconventional Computing* (2024).** **[meta]**
-Could not fetch (Nature IDP redirect). SNN *regression* on transient signals — potentially very
-close to our task. **Highest-priority remaining fetch.**
+**D4. Stoffel, M., Tandale, S.B. (2024). Spiking neural networks for nonlinear regression of complex
+transient signals on sustainable neuromorphic processors. *npj Unconventional Computing* 1, 2.
+doi:10.1038/s44335-024-00002-4.** **[meta+]** (bibliographic data verified via the RWTH repository;
+body **not** obtained — the Nature page redirects to an IdP, and the repository PDF link serves an
+HTML page. Three routes tried; stopped.)
+Search-level: supervised surrogate-gradient training, Legendre Memory Unit cells, regression of
+transient signals from structural mechanics. **Priority downgraded:** it is supervised, not
+Poisson rate-coded, and not a reconstruction-quality study, so it is less close to our task than
+its title suggested. Cite only for "SNN regression is an active gap", and only after opening.
+
+**D5. Henkes, A., Eshraghian, J.K., Wessels, H. (2024). Spiking neural networks for nonlinear
+regression. *Royal Society Open Science* 11, 231606. doi:10.1098/rsos.231606, PMC11062414.**
+**[read]** (full text via PMC; targeted extraction)
+Surrogate-gradient SNN regression for material modelling (strain → stress). Input by *"constant
+current injection"*; output by *"population voting on membrane potential"* — decoding membrane
+potentials rather than spike rates. Reports that *"accuracy depends on both the number of hidden
+neurons and output neurons"*. Does not discuss rate coding. Cite for: a competitive regression
+design that sidesteps spike-rate decoding at both ends.
+
+**D6. Ren, Y., Zuo, H., Cai, Y., Wang, S., Ran, G., Lai, D. (2026). DCPA-SNN, Direct-Coding-
+Physics-Aware Spiking Neural Network: A Framework for Wearable ECG Denoising Under Dynamic-Noise
+Conditions. *Sensors* 26(15), 4695. doi:10.3390/s26154695.** **[read]** (full text via PMC;
+targeted extraction)
+**The closest competitor found.** Supervised surrogate-gradient LIF encoder–decoder SNN for ECG
+denoising; MIT-BIH clean signals with NSTDB noise (BW/MA/EM) at −6 to 4 dB input; cross-record
+split. Mixed-noise result: denoised SNR 5.80 dB, improvement 6.80 ± 3.09 dB; Pan–Tompkins R-peak
+detection against annotations 90.71% → 95.72% (tolerance not stated). The first convolutional
+layer processes continuous ECG directly — *"direct-coding"* — and **no rate-coding ablation is
+reported** and no reason for avoiding it is given. Cite for: the state of SNN ECG denoising, and
+as a design point that avoids exactly the stage our cascade law finds binding. **Do not** cite
+it as evidence that rate coding limits fidelity; it does not say so.
 
 ---
 
@@ -327,11 +379,15 @@ vocabulary (MSE, RMSE, PRD, SNR_imp).
 **G2. Empirical Wavelet Transform Based ECG Signal Filtering Method. *Journal of Electrical and
 Computer Engineering* (2024).** **[meta]** — wavelet baseline reference.
 
-**G3. Does the Data Processing Inequality Reflect Practice? On the Utility of Low-Level Tasks.
-*ICLR 2026*; arXiv:2512.21315.** **[meta]**
-Directly relevant to our framing: the DPI says denoising cannot increase information, yet
-denoising demonstrably helps at finite sample sizes. If we invoke DPI at all, this is the paper
-that says why the naive invocation is too strong. **Should be read before R6.**
+**G3. Turgeman, R., Tirer, T. (2026). Does the Data Processing Inequality Reflect Practice? On the
+Utility of Low-Level Tasks. *ICLR 2026*; arXiv:2512.21315.** **[abs]** (abstract read verbatim)
+Proves that *"for any finite number of training samples, there exists a pre-classification
+processing that improves the classification accuracy"*, while the DPI holds for the optimal Bayes
+classifier. **Consequence for R6:** a DPI argument is safe for our *reconstruction-fidelity*
+claims — the cascade law is a statement about SNR through fixed stages, not about a learned
+downstream classifier — but must not be extended to say the SNN cannot help a downstream clinical
+classifier. R1's QRS result (a detector *benefits* below 0 dB) is exactly the finite-sample,
+suboptimal-downstream case this paper describes, and should be framed with it.
 
 ---
 
@@ -376,11 +432,22 @@ not a discovery paper, and it should be written and pitched as one.
 
 ## Remaining R0 work
 
-- [ ] Open D4 (npj regression) — highest priority; potentially the closest task match.
-- [ ] Open A2 (Kanitscheider PNAS) via an institutional or preprint route; publisher 403s.
-- [ ] Open A3 and verify its author list.
-- [ ] Verify full author lists for B4, C3, A3, A4.
-- [ ] Find the real source of the "2ⁿ timesteps for n bits" claim, or drop it and derive in M3.
-- [ ] Read G3 before writing any DPI argument in R6.
-- [ ] Search once more specifically for rate-coded SNN *time-series regression* — the searches so
-      far were image-dominated, and D4 suggests that literature exists.
+- [~] Open D4 (npj regression). **Blocked** — three routes failed (Nature IdP, RWTH PDF serves
+      HTML). Bibliography verified; priority downgraded after the search-level read showed it is
+      supervised LMU regression, not rate-coded reconstruction. Needs an institutional login.
+- [x] Open A2 (Kanitscheider PNAS) — **done** via PMC4687541, with verbatim checks. Load-bearing
+      for M3/M4; see the note on intrinsic vs input-limited loss.
+- [x] Open A3 and verify its author list — **done**; the earlier summary was wrong and is corrected.
+- [x] Verify full author lists for B4, C3, A3, A4 — **done**.
+- [x] "2ⁿ timesteps for n bits" — **dropped.** No source was found and none is needed: M3 derives
+      the ceiling from error correlation, not from spike-count bit depth.
+- [x] Read G3 before writing any DPI argument — **abstract read**; the constraint it places on R6
+      is recorded in its entry.
+- [x] Search once more for rate-coded SNN time-series regression — **done**; added D5 (Henkes et
+      al. 2024) and D6 (DCPA-SNN, 2026, the closest competitor). Pattern worth one careful sentence
+      in §II: recent SNN regression and ECG-denoising designs (D4, D5, D6) avoid Poisson rate
+      coding at the input, the output, or both — and none characterises a fidelity ceiling or
+      states rate coding as the reason.
+- [ ] Open D4 through an institutional route before citing it for anything beyond its existence.
+- [ ] Open "Regression Model Employing Spiking Neural Network for Bio-Signal Analysis With Hardware
+      Integration" (found on ResearchGate, 2025) — **[meta]**, not yet opened.

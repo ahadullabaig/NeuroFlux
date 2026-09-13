@@ -20,8 +20,9 @@ the score. A metric that discriminates must separate
     passive network     (the untrained pipeline's reconstruction)
 
 by more than the seed-to-seed spread, across the SNR range — the R1 acceptance
-criterion. Both conditions are scored with the old metric and the new one side
-by side, so the comparison is between metrics, not between runs.
+criterion. (The passive arm here is scaled-init; see `reconstruct`.) Both
+conditions are scored with the old metric and the new one side by side, so the
+comparison is between metrics, not between runs.
 
 The unit of analysis is the record, per `docs/r2_findings.md`: each record
 contributes one mean per (condition, input SNR), and the spread reported is
@@ -100,9 +101,12 @@ def reconstruct(noisy: np.ndarray, seed: int, calibrate: bool) -> np.ndarray:
     """
     Passive (untrained) pipeline output for one noisy signal.
 
-    `calibrate=False` is the Phase 3 path exactly — default `g_syn`, no gain
-    calibration — because that is the configuration §5.6.2's claim was measured
-    in, and re-scoring a different network would not test that claim.
+    `calibrate=False` uses the default `g_syn` with no gain calibration, but it
+    is **not** the Phase 3 network: it initialises with `init_scheme="scaled"`,
+    where the Phase 3 runner uses the `Network.feedforward` default,
+    `"uniform"`. The two passive networks score very differently on QRS F1 —
+    see `docs/r1_findings.md` §4 — so this arm must not be read as Phase 3's.
+    `scripts/r2_reanalysis/identity_baseline.py` measures the Phase 3 network.
     `calibrate=True` adds M1b's per-layer gain calibration, which is what every
     mechanism experiment from M2 on uses.
     """

@@ -7,21 +7,23 @@
 > collapsed into 32 groups and the reported `n = 80` was 5 seeds x 16 patients presented as
 > 80 replicates of one condition. The unit of analysis is now one configuration per record
 > (512 groups, `n = 5`; 16 records paired per comparison). **Every conclusion below holds in
-> direction.** The precision claims are restated in `r2_findings.md` §3, which confirms
-> §5.6.2's trade-off with bootstrap intervals and adds one new result: the ΔSNR/rpeak
-> trade-off *reverses* between 10 and 50 epochs, so the canonical 10-epoch configuration
-> sits near the worst point for R-peak integrity.
+> direction** for ΔSNR. The precision claims are restated in `r2_findings.md` §3. (That section
+> also confirmed §5.6.2's ΔSNR/rpeak trade-off and reported it reversing between 10 and 50 epochs;
+> both were artifacts of `rpeak_integrity`, and `r2_findings.md` §5 reverses them on QRS F1 — see
+> the next banner.)
 
-> **Every `rpeak_integrity` number in this document is superseded — see `docs/r1_findings.md`.**
-> The metric sets its peak-prominence floor to a fraction of *each signal's own* standard
-> deviation, so it self-normalises against the noise it is meant to penalise. Over a 25 dB
-> change in input noise it moves by **0.000**, scoring the unprocessed noisy signal 1.000 at
-> −5 dB input. It is deprecated in place; `metrics/qrs.py` replaces it with detections scored
-> against the cardiologist `.atr` annotations at the ANSI/AAMI EC57 tolerance, reporting Se,
-> PPV, F1 and RMS timing jitter. **The regime-dependent conclusions below survive** — the QRS
-> F1 reproduces the same crossover at 0–5 dB from an independent reference — but the
-> unconditional "preserves R-peaks perfectly" claim does not. Corrections are inline at §5.6.2.
-> ΔSNR figures are unaffected.
+> **Every `rpeak_integrity` number in this document is superseded, and both R-peak conclusions
+> are reversed — see `docs/r1_findings.md` §2, §4–§5 and `docs/r2_findings.md` §5.**
+> The metric scores recall only and sets its peak-prominence floor from *each signal's own*
+> standard deviation, so it rewards densely firing outputs and cannot see noise: it moves by
+> **0.000** over a 25 dB change in input noise, scoring the unprocessed signal 1.000 at −5 dB.
+> Re-measured against the cardiologist `.atr` annotations (`metrics/qrs.py`, 16 records, 10 seeds):
+> **(1)** the passive network does *not* preserve R-peaks — it destroys QRS recoverability at
+> ≥ 5 dB input (F1 −0.55 to −0.76 against doing nothing) and helps only at −5 dB; **(2)** STDP does
+> *not* damage R-peaks — 10 epochs raises F1 over passive by +0.34 to +0.67 at every input SNR;
+> **(3)** 50 epochs is *worse* than 10 on F1 at low SNR, not better. The regime boundary for ΔSNR
+> (improves at ≤ 0 dB, degrades at ≥ 5 dB) is unaffected and is now echoed by the trained network's
+> F1 against doing nothing. ΔSNR figures throughout are unaffected.
 
 **Source data:** `results/phase3_full_sweep.db` (2,560 rows). Analysis artifacts: `results/phase3_full_sig/significance_results.csv`, `results/phase3_full_sig/failure_modes.csv`, `results/phase3_full_figures/*.png`.
 
@@ -300,30 +302,26 @@ Per-record range from +1.71 dB (rec 234, prominent QRS) to −0.78 dB (rec 231, 
 
 #### 5.6.2 Untrained baseline — **the most important diagnostic finding**
 
-> **Correction (R1, 2026-09-12).** Every `rpeak_integrity` figure in this
-> section — including the **1.000** column that the section's second finding
-> rests on — is a metric artifact. `rpeak.py:54-62` sets the peak-prominence
-> floor to `0.5 x std` of each signal *independently*, so the detection
-> threshold rises in proportion to the noise it should penalise, and the score
-> compares detections against detections rather than against ground truth.
-> Measured over a 25 dB change in input noise with nothing else altered,
-> `rpeak_integrity` moves by **0.000**: the *unprocessed noisy signal* scores
-> 1.000 at −5 dB input, the same as a clean record. See `docs/r1_findings.md`
-> §2 for the measurement.
+> **Correction (R1 and R2 §5).** Every `rpeak_integrity` figure in this section — including the
+> **1.000** column the second finding rests on — is a metric artifact, and on a working metric
+> both findings about R-peaks are reversed. `rpeak.py` scores recall only and sets its prominence
+> floor from each signal's own standard deviation; over a 25 dB change in input noise it moves by
+> **0.000**, and the *unprocessed* noisy signal scores 1.000 (`docs/r1_findings.md` §2).
 >
-> Re-measured against the cardiologist `.atr` annotations at the ANSI/AAMI
-> EC57 tolerance (`metrics/qrs.py`, 16 records, paired on record, Holm
-> corrected), the *direction* of this section's claim survives but its scope
-> narrows sharply. The passive network beats the do-nothing baseline on QRS F1
-> at **−5 dB (+0.366, p_holm = 0.0003)** and **0 dB (+0.224, p_holm = 0.031)**,
-> and has no detectable effect at 5, 10 or 20 dB. "The passive architecture
-> preserves R-peaks perfectly at every input SNR" is not supported. "Below
-> 0 dB the passive architecture recovers beats that are otherwise
-> undetectable, and above 5 dB it neither helps nor hurts" is — and it matches
-> the ΔSNR regime boundary this document reports elsewhere, from an
-> independent metric with an independent reference.
+> Re-measured against the `.atr` annotations at the EC57 tolerance (`metrics/qrs.py`;
+> `results/r2_reanalysis/qrs_rescore.db`, 16 records × 10 seeds, paired on record, Holm corrected):
 >
-> The ΔSNR columns below are unaffected; `calculate_snr` has no such defect.
+> | input SNR | passive − doing nothing | 10 ep − passive | 50 ep − 10 ep |
+> |---|---|---|---|
+> | −5 dB | **+0.12** | **+0.34** | **−0.06** |
+> | 0 dB | −0.06 (inconclusive) | **+0.53** | **−0.14** |
+> | 5 dB | **−0.55** | **+0.57** | −0.13 (inconclusive) |
+> | 10 dB | **−0.75** | **+0.67** | −0.04 (inconclusive) |
+> | 20 dB | **−0.76** | **+0.66** | −0.03 (inconclusive) |
+>
+> (median ΔF1; bold = significant after Holm.) The passive network does not preserve R-peaks, STDP
+> does not damage them, and more training does not recover them. The ΔSNR columns below are
+> unaffected; `calculate_snr` has no such defect.
 
 
 **Source:** `results/phase3_diagnostics/untrained.db` (320 runs with epochs=0).
@@ -352,12 +350,14 @@ This is a **substantive revision to the §4 epochs-paradox interpretation.** The
 
 This is a more nuanced — and more honest — story.
 
-> **Correction (R1).** Restate once more, with the metric fixed: *below 0 dB
-> the passive architecture recovers QRS complexes that are otherwise
-> undetectable; above 5 dB it neither helps nor hurts; STDP improves global SNR
-> at the cost of landmark fidelity throughout.* The trade-off between the two
-> mechanisms is real and is what this section got right. The unconditional
-> "preserves clinical landmarks" is what it got wrong, and the metric is why.
+> **Correction (R1 and R2 §5).** The mechanism paragraph above explains a result that does not
+> exist. What the annotation-referenced metric shows instead: the random-weight (uniform-init)
+> network fires densely — 55–85 Hz at the output on the records measured — and its decoded trace
+> carries no readable QRS; STDP depresses layer-1 weights by roughly an order of magnitude, the
+> output becomes sparse, and beats become detectable. The trade-off worth characterising is
+> between *dense* output (what rate-coded reconstruction rewards) and *sparse* output (what
+> landmark detection needs), not between STDP and no STDP — see `docs/r1_findings.md` §5, where
+> this is stated as a hypothesis with direct but limited (4-record) evidence.
 
 #### 5.6.3 Network size scaling — **modest improvement available**
 

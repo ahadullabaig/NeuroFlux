@@ -281,6 +281,11 @@ property of the configuration rather than of the data.
 
 ### 8.2 The mechanism
 
+> **Superseded by §8.6.1** (16 records × 10 seeds). The two-record `c` values below were
+> unrepresentative: at full power `c` is 0.35–0.44, not 0.19–0.29, it barely drifts with width,
+> and the claim that real-data `c` sits below synthetic — offered here as the reason the real
+> ceiling is higher — does not survive. The 20+ dB independence gap does.
+
 Error structure, records 214 and 231, `[N,N]`, tau=20 ms (`noise_structure.py --dataset mit-bih`):
 
 | N | Λ measured | Λ if c=0 | c | Λ at N→∞ |
@@ -296,6 +301,9 @@ width buys ~0.3 dB per doubling against the +3.01 dB independence would give. Re
 higher.
 
 ### 8.3 The intervention
+
+> **Restated at full power in §8.6.2** (16 records × 10 seeds). Every conclusion holds; the
+> numbers move by a few tenths of a dB.
 
 4 records × 2 seeds, all schemes rate-calibrated (39.0–39.5 Hz):
 
@@ -327,15 +335,91 @@ This discharges the roadmap's "re-run M2 on real MIT-BIH".
 
 ### 8.5 What real data changed, honestly
 
-- **The single-anchor extrapolation is weaker than on synthetic.** Predicting Λ at every
-  width from `c` measured at N=32 undershoots by up to +2.04 dB at N=512 (synthetic:
-  +0.94). `c` drifts with N more steeply on real data (0.37 → 0.19). The *structural*
-  model is validated — measured Λ matches its own width's `N→∞` limit to 0.04 dB — but
-  `c` must be measured per width, not extrapolated. State the model in that form.
-- **Encoder firing rate varies far more on real records** (15.5 to 58.8 Hz) because
-  `calibrate_gain` calibrates the LIF layers only; the encoder's rate follows the signal's
-  amplitude distribution. This is a real confound for cross-record comparison of the
-  encoder's Λ and should be controlled before the encoder numbers go in a table.
-- **Power is still uneven.** §8.1 and §8.4 use all 16 records; §8.2 uses 2 and §8.3 uses 4.
-  The mechanism sections are architecture claims rather than data claims, so this is
-  defensible, but it should be stated rather than glossed.
+- ~~**The single-anchor extrapolation is weaker than on synthetic.**~~ **Corrected in §8.6.1.**
+  At two records, predicting Λ from `c` at N=32 undershot by up to +2.04 dB and `c` appeared to
+  drift 0.37 → 0.19. At 16 records × 10 seeds the drift is 0.40 → 0.36 and the undershoot is at
+  most +1.04 dB (layer 1, N=256). The model is now stated in measured form (§8.6.1): `c` measured
+  at each width, no extrapolation.
+- ~~**Encoder firing rate varies far more on real records.**~~ **Controlled in §8.6.3.** The
+  rate did vary (15.6–65.2 Hz at 10 seeds), but holding it at 40 Hz leaves the cross-record spread
+  of encoder Λ essentially unchanged, and the encoder still binds on all 16 records.
+- ~~**Power is still uneven.**~~ **Resolved in §8.6.** Every real-data mechanism result is now
+  16 records × 10 seeds.
+
+### 8.6 Full power: 16 records × 10 seeds, and the encoder control
+
+Every §8 experiment re-run at the roadmap's power commitment. Sources:
+`results/m3_bound/m3_cascade_mitbih_s10.csv`, `m3_cascade_mitbih_s10_encoder40.csv`,
+`m3_noise_structure_mitbih_s10.csv`, `m3_weight_correlation_mitbih_w{128,512}_s10.csv`.
+
+#### 8.6.1 The width model, in measured form
+
+`noise_structure.py`, `[N,N]`, τ = 20 ms, clean input, every width measured directly:
+
+| N | encoder Λ | encoder `c` | layer-1 Λ measured | layer-1 Λ if c = 0 | layer-1 `c` | layer-1 Λ at N→∞ |
+|---:|---:|---:|---:|---:|---:|---:|
+| 16 | 0.13 | 0.055 | −1.93 | 6.80 | 0.444 | −1.57 |
+| 32 | 1.58 | 0.053 | −0.19 | 10.82 | 0.396 | 0.06 |
+| 64 | 2.58 | 0.053 | 1.00 | 14.50 | 0.369 | 1.15 |
+| 128 | 3.23 | 0.053 | 1.73 | 17.89 | 0.353 | 1.82 |
+| 256 | 3.56 | 0.053 | 2.05 | 21.10 | 0.350 | 2.09 |
+| 512 | 3.78 | 0.053 | **2.01** | **24.23** | 0.362 | **2.03** |
+
+**The ceiling is now visible in the measurements themselves.** Layer-1 Λ plateaus at 2.0 dB from
+N = 256: doubling width to 512 changes it by −0.04 dB, against the 22.2 dB gap to what independent
+neurons would deliver. No extrapolation is involved.
+
+Stated this way, the width model is: `Λ(N) = var_signal / (var_single · (1/N + c_N(1 − 1/N)))`
+with `c_N` measured at each width. At the widths that matter (N ≥ 128), `c_N` is flat at 0.35–0.36,
+so `Λ(N)` is within 0.1 dB of its `N → ∞` limit, `var_signal / (c · var_single)`. Extrapolating from
+a single anchor at N = 32 still undershoots — by up to +1.04 dB for layer 1 — because `c` falls
+from 0.40 to 0.35 between N = 32 and 128; the manuscript should quote measured Λ, not predicted.
+
+The encoder behaves as the model's idealisation: `c` is constant at 0.053–0.055 across a 32× range of
+width, and its extrapolation error is +0.6 dB at most.
+
+Real-data layer-1 `c` (0.35–0.44) is **not** lower than synthetic (0.33–0.47), so §8.2's
+explanation for the slightly higher real ceiling is withdrawn; the difference sits in `var_signal`
+and the encoder stage, not in the correlation.
+
+#### 8.6.2 The intervention
+
+`weight_correlation.py`, rate-calibrated (39.7–40.0 Hz):
+
+| scheme | cos | `c` (N=512) | Λ (N=512) | SNR out (N=128) | SNR out (N=512) |
+|---|---:|---:|---:|---:|---:|
+| gaussian | 0.901 | 0.444 | 0.94 | 3.44 | 3.46 |
+| uniform / scaled (shipped) | 0.750 | 0.362 | 2.01 | 3.92 | 4.07 |
+| **sparse** (ρ = 0.1) | **0.075** | **0.203** | **3.88** | **4.68** | **5.31** |
+
+Measured cosine 0.7525 against 0.7519 predicted at N = 128. Ranking monotone in cosine at both
+widths. Sparse `[512,512]` reaches **5.31 dB against the shipped `[32,16,8]` ceiling of
+1.74 dB** (§8.6.3) — **+3.57 dB** on real patient ECG. M4 (`docs/m4_findings.md`) shows this is
+decorrelation, and that K ≈ 16 inputs per neuron does better still (5.43 dB).
+
+#### 8.6.3 The encoder-rate control
+
+`calibrate_gain` holds each LIF layer at 40 Hz but cannot reach the encoder, whose rate followed
+each record's amplitude distribution. `calibrate_encoder_rate` (new in
+`network/calibration.py`) sets the encoder's ceiling per drive so its mean rate is held too.
+`run_m3.py --encoder-rate 40`, shipped `[32,16,8]`, paired with an uncontrolled run on the same
+seeds:
+
+| | encoder rate | encoder Λ across records | corr(rate, Λ_enc) | ceiling | encoder binds |
+|---|---:|---:|---:|---:|---:|
+| fixed 100 Hz ceiling | 15.6–65.2 Hz | 3.85 ± 1.14 dB | +0.39 | 1.74 ± 0.59 dB | 16 / 16 |
+| encoder held at 40 Hz | 40.0–40.2 Hz | 4.05 ± 1.09 dB | — | 1.88 ± 0.60 dB | 16 / 16 |
+
+- **The confound was real in rate and negligible in consequence.** Removing a 4× spread in encoder
+  rate barely narrows the cross-record spread of encoder Λ (sd 1.14 → 1.09 dB). That spread is a
+  property of the signals — their morphology and amplitude distribution — not of the operating
+  point.
+- **The encoder binds on every record either way**, so §8.1's "encoder binds on all 16" stands
+  as a controlled result.
+- **The ceiling rises slightly under control**, median +0.18 dB (Wilcoxon p = 0.018): low-rate
+  records gain (record 100: 0.66 → 0.92 dB) and high-rate records lose (108: 1.76 → 1.51 dB).
+- **The law is indifferent.** RMS residual at input SNR ≥ 10 dB is 0.221 dB controlled against
+  0.235 dB uncontrolled (144 points each); mean residual +0.12 and +0.13 dB.
+
+The uncontrolled run also re-establishes §8.1 at 10 seeds: ceiling 1.74 ± 0.59 dB (2 seeds:
+1.71 ± 0.76), RMS residual 0.235 dB at ≥ 10 dB input.

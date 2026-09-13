@@ -6,9 +6,10 @@
    0.000 across a 25 dB change in input noise and scores the *unprocessed*
    noisy signal 1.000 (``docs/r1_findings.md`` §2). A passing result here says
    the pipeline still runs, not that R-peaks are preserved. The finding it was
-   written to pin has been re-measured against ``.atr`` annotations with
-   ``metrics/qrs.py`` and holds only at input SNR <= 0 dB. Kept as a smoke test
-   of the ``epochs=0`` path until a QRS-scored regression replaces it.
+   written to pin is **false**: re-measured against ``.atr`` annotations with
+   ``metrics/qrs.py``, the passive network destroys QRS recoverability at input
+   SNR >= 5 dB and helps only at -5 dB (``docs/r1_findings.md`` §4.1). Kept as a
+   smoke test of the ``epochs=0`` path until a QRS-scored regression replaces it.
 
 Pins one of the load-bearing Phase 3 diagnostic findings — that the
 *passive* SNN pipeline (no STDP learning) preserves R-peak landmarks

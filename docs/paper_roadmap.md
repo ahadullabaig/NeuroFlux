@@ -248,9 +248,10 @@ in an unsupervised STDP pipeline, where no reference activation distribution exi
 `docs/r1_findings.md`, from `results/r1_metrics/saturation.csv` (16 records × 3 seeds × 5 input SNRs × 4 conditions).
 
 1. **The old metric is a constant function on this domain.** Span 0.000 over −5 → 20 dB input, sd 0.000 across records. Phase 3 §5.6.2's "passive network preserves R-peaks perfectly (1.000)" is the identity baseline's score too.
-2. **Phase 3's regime claim survives, on a clinical metric with human ground truth.** Passive minus identity, paired on record, Holm corrected: **+0.366 F1 at −5 dB (p = 0.0003)**, **+0.224 at 0 dB (p = 0.031)**, no effect at 5/10/20 dB. Same crossover as ΔSNR, independent metric, independent reference.
-3. **New:** M1b's gain calibration collapses QRS F1 to ≈0 at every input SNR while barely moving the SNR metrics. Rate fidelity and landmark preservation are separate objectives here, and the operating point that optimises one destroys the other — the STDP trade-off of §5.6.2, reached from a different direction. **This is R3's second axis.**
-4. Corrections written into `docs/phase3_findings.md` (top banner + §5.6.2, twice) and `docs/r2_findings.md` §3.
+2. ~~Phase 3's regime claim survives for the passive network.~~ **Corrected** — that arm was scaled-init; Phase 3 used uniform. On the Phase 3 networks (16 records × 10 seeds, `qrs_rescore.db`), against doing nothing: **passive destroys QRS recoverability at ≥ 5 dB** (F1 −0.55 to −0.76) and helps only at −5 dB; **10-epoch STDP helps at −5 and 0 dB** (+0.41, +0.36) with no effect above. The regime crossover belongs to the trained network.
+3. **Both Phase 3 R-peak conclusions reverse** (`docs/r2_findings.md` §5): STDP raises F1 over passive by +0.34 to +0.67 at every SNR, and 50 epochs is worse than 10. `rpeak_integrity` ranks every configuration in exactly the reverse order of F1.
+4. **Gain calibration collapses QRS F1 to ≈0**, and a direct measurement points to one mechanism for all of it: landmark recoverability needs a *sparse* output (uniform-init passive fires at 55–85 Hz; trained and scaled-init networks at 0.2–5 Hz). Hypothesis with 4-record evidence. **This is R3's second axis: output rate.**
+5. Corrections written into `docs/phase3_findings.md` (banners + §5.6.2, twice), `docs/r2_findings.md` §3 and §5, `docs/r1_findings.md` §4–§5, and CLAUDE.md.
 
 ### Acceptance criteria
 
@@ -478,7 +479,9 @@ noise-figure cascade, and it has the algebraic form of Moreno-Bote's
       `N→∞` limit to 0.04 dB, which is the form that survives. See m3_findings §8.5.
 - [ ] **Control the encoder's firing rate across records.** `calibrate_gain` calibrates
       LIF layers only, so the encoder's rate follows each record's amplitude distribution
-      (15.5–58.8 Hz measured). Confounds any cross-record comparison of encoder Λ.
+      (15.6–65.2 Hz at 10 seeds). ~~Confounds any cross-record comparison of encoder Λ.~~
+      **Controlled** — `calibrate_encoder_rate`; spread of encoder Λ barely changes and the
+      encoder still binds on 16/16 (`docs/m3_findings.md` §8.6.3).
 
 **Where the law fails is the good news.** Below ~10 dB input it *under*-predicts by
 0.8–2.8 dB — the network beats it. The encoder's clip to `[0,1]` acts as a limiter,
@@ -504,11 +507,17 @@ Ranking is monotone in cosine similarity at every width, with firing rate held a
 default's 1.33 dB** — the largest single improvement in the project, from a one-word
 argument change.
 
-- [ ] Density sweep at fixed fan-in, to separate decorrelation from fan-in growth.
-      At rho=0.1, N=32 each neuron sees ~3 inputs; the N>=128 numbers are unaffected.
+- [x] Density sweep at fixed fan-in. **Done** — `docs/m4_findings.md`. It is decorrelation:
+      error correlation is set by column cosine (R² 0.84 synthetic, 0.86 real, cosine alone).
+      Fan-in costs per-neuron variance, which produces an interior optimum at **K ≈ 8–16 inputs
+      per neuron at every width** — a near-constant fan-in, not a constant density. On real ECG,
+      optimum minus dense is +0.30 / +0.73 / +1.20 dB at N = 32 / 128 / 512, 16/16 records
+      improved at every width, p_holm = 9×10⁻⁵. `[512,512]` at K=16: 5.43 dB vs shipped 1.74.
 - [x] Confirm on real MIT-BIH. **Done** — 4 records, both widths, ranking monotone in
       cosine similarity, `[512,512]` sparse at 5.14 dB vs the shipped default's 1.71 dB.
-      `docs/m3_findings.md` §8.3. **Still owed:** >= 10 seeds and equivalence tests.
+      `docs/m3_findings.md` §8.3. ~~Still owed: >= 10 seeds~~ **Done at 16 × 10** (§8.6.2:
+      sparse 5.31 dB vs 4.07 dense at N=512). Equivalence tests not needed — every contrast is a
+      difference, not an invariance.
 - [ ] Signed-weight variant of `STDPSynapse`. The model says `mu -> 0` gives
       `cos -> 0`, the strongest available intervention; STDP's `[0,1]` bound
       currently forbids it. Scope decision needed — this may be a second paper.
@@ -662,22 +671,30 @@ what is left is power, statistics and writing.
    verified. The cascade law predicts real patient ECG to **+0.02 ± 0.06 dB at 20 dB input
    and −0.00 ± 0.02 dB at 40 dB**, n=16 records, zero fitted parameters; the ceiling is
    1.71 ± 0.76 dB; the correlation mechanism and the sparse intervention (+3.43 dB) both
-   replicate. See `docs/m3_findings.md` §8. **Still owed:** M1a on real data, and ≥ 10
-   seeds throughout (§8.5 records where power is currently uneven).
+   replicate. See `docs/m3_findings.md` §8. ~~Still owed: M1a on real data, and ≥ 10 seeds.~~
+   **Done (8b)** — at 16 × 10 the ceiling is 1.74 ± 0.59 dB and the intervention +3.57 dB (§8.6).
 8. ~~Finish R1 — `metrics/distortion.py` and `metrics/qrs.py`.~~ **Done** — `docs/r1_findings.md`.
-   `rpeak_integrity` moves by 0.000 over a 25 dB change in input noise; annotation-referenced
-   QRS F1 confirms the regime boundary instead (+0.366 at −5 dB, +0.224 at 0 dB, Holm
-   significant; nothing at ≥ 5 dB). Gain calibration collapses F1 to ≈0 — a second axis for
-   R3. **Still owed:** re-run R2's rpeak comparisons on `qrs_f1`, and the detector-method
-   robustness check in R5.
-9. **Run M4's density sweep** at fixed fan-in — the one open question about the
-   intervention, and the intervention is the paper's actionable contribution.
-10. **Re-run Findings 2 and 5 under per-layer rate control.** M3 predicts these will not
-   move (both sweep non-binding stages), which makes it a cheap confirmation of the law
-   rather than a risk.
-11. **Finish R0's residual reads** — the seven open items at the end of `related_work.md`,
-    chiefly the npj regression paper and Kanitscheider 2015. Moreno-Bote et al. (2014) is
-    now load-bearing for Section III and must be read in full, not from the abstract.
+   `rpeak_integrity` moves by 0.000 over a 25 dB change in input noise.
+8a. ~~Re-run R2's R-peak comparisons on `qrs_f1`.~~ **Done** — `docs/r2_findings.md` §5. Both
+   Phase 3 R-peak conclusions reverse; no ΔSNR/landmark trade-off over epochs; passive destroys
+   QRS at ≥ 5 dB. R1's own passive-arm claim corrected (wrong init scheme).
+8b. ~~M1a on real data; ≥ 10 seeds for M3 §8.2/§8.3; encoder-rate control.~~ **Done** —
+   M1a replicates (independent input +0.086 ± 0.023 dB/doubling, 2.8% of ideal, 16 records);
+   M3 width model restated in measured form (layer-1 Λ plateaus at 2.0 dB from N=256);
+   encoder confound controlled. `docs/m1a_findings.md`, `docs/m3_findings.md` §8.6.
+8c. **R0 residual reads — mostly done.** Kanitscheider 2015 read and verified verbatim (its
+   Eq. 4 is our column-cosine result); author lists fixed; A3 summary corrected; G3 constrains
+   the DPI framing; DCPA-SNN (2026) added as the closest competitor. **D4 still blocked**
+   (needs an institutional route).
+8d. **Still owed from this block:** the detector-method robustness check (R5); the output-rate
+   sweep that tests R1 §5's sparse-output hypothesis (R3 C3).
+9. ~~Run M4's density sweep at fixed fan-in.~~ **Done** — `docs/m4_findings.md`.
+10. **Findings 2 and 5 under per-layer rate control — folded into R3 C2 and R5.** Finding 2's
+    knobs are C2's invariance sweep and Finding 5's encoder × decoder table is R5's grid; running
+    them separately now would duplicate both. Both stages must run under per-layer *and*
+    encoder rate control.
+11. ~~Finish R0's residual reads~~ **Mostly done (8c).** Moreno-Bote 2014 (A1) was already
+    `[read]`; Kanitscheider 2015 is now read and verified. Only D4 remains, blocked on access.
 12. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
 
 ---

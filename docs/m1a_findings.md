@@ -137,3 +137,41 @@ The contribution is now: a rate-coded unsupervised-STDP reconstruction pipeline 
 gain forgone), input quality (40 dB range), output width, decoder time constant, training
 duration, encoder and decoder — and the cause is internal to the spiking representation,
 not the input coding. M2 must localise it.
+
+---
+
+## Real MIT-BIH — the ceiling holds on patient ECG
+
+**Data:** `results/m1a_shared_input/m1a_mitbih.csv` — 16 records × 3 input modes × 6 widths ×
+10 seeds, 2,880 rows, **0 degenerate**. Each seed takes a different artifact-free window of its
+record. **Reproduce:** `uv run python scripts/m1a_shared_input/run_m1a.py --dataset mit-bih --seeds 10`.
+The script was refactored to take real records first, and verified to reproduce
+`m1a_results.csv` byte for byte before this run.
+
+The record is the unit of analysis: a slope is fitted per record, then summarised across the 16.
+
+| Mode | slope, dB per doubling (mean ± sd across records) | range across records | ceiling at N = 256 |
+|---|---:|---:|---:|
+| `tiled` | +0.102 ± 0.028 | [+0.046, +0.150] | 0.92 ± 0.27 dB |
+| `independent` | **+0.086 ± 0.023** | [+0.051, +0.133] | 0.76 ± 0.21 dB |
+| `delay` | −0.044 ± 0.031 | [−0.121, −0.005] | 0.03 ± 0.04 dB |
+
+**The pre-registered verdict replicates.** Under `independent` input — where information really
+does grow with width and an ideal estimator gains +3.01 dB per doubling — the network gains
++0.086 dB per doubling, **2.8% of the ideal**. The largest slope on any of the 16 records is
++0.133. One-sided Wilcoxon against 3.01: p = 1.5 × 10⁻⁵.
+
+**Giving the network more information makes it very slightly worse, not better.** Paired on
+record, `independent` minus `tiled` is −0.017 dB per doubling (range −0.030 to +0.005,
+Wilcoxon p = 0.0001). The same ordering appeared on synthetic ECG (+0.056 against +0.090). The
+effect is far too small to matter — a tenth of a dB across the full 32× range — but its direction
+rules out the reading M1a existed to test: if the tiled construction were what capped the
+ceiling, independent input would lift it.
+
+`delay` again collapses toward zero, as on synthetic: lagged channels smear the instantaneous
+rate code the population decoder reads.
+
+**What this closes.** The shared-input objection is now refuted on synthetic *and* real ECG, with
+the record as the unit of analysis and 10 seeds. M3's cascade law gives the reason the input mode
+cannot matter: the binding losses are the stages' intrinsic `1/Λ` terms, which depend on the
+weight columns and the spiking noise, not on how much information arrives.
