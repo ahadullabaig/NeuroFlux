@@ -2,6 +2,12 @@
 
 **Status:** resolved. `metrics/distortion.py` and `metrics/qrs.py` are in the
 library and tested; `rpeak_integrity` is deprecated in place.
+
+> **Read §4 and §5 in their corrected form.** The first version of this document
+> attributed a regime advantage to "the passive network" using a scaled-init
+> network that Phase 3 never ran, and described calibration's QRS collapse as
+> "the same trade-off Phase 3 found for STDP". Both are corrected below; the
+> saturation result in §2 is unaffected.
 **Source data:** `results/r1_metrics/saturation.csv` — 16 MIT-BIH records x 3
 seeds x 5 input SNRs x 4 conditions, 768 rows.
 **Reproduce:** `uv run python scripts/r1_metrics/saturation.py`, or
@@ -58,11 +64,19 @@ Measured on the same runs, `rpeak_integrity` cannot distinguish:
 - a reconstruction whose affine-corrected SNR is 0.3 dB (0.996–1.000).
 
 The claim "the passive architecture preserves clinical landmarks" is therefore
-**unsupported by the evidence given for it**. Section 4 shows it is not thereby
-false — but it needed a different measurement to establish, and it comes with a
-regime restriction Phase 3 did not state.
+**unsupported by the evidence given for it**. Section 4 measures it properly,
+and it turns out to be largely false.
 
 ## 4. What the replacement finds
+
+> **Correction (second pass).** The first version of this section reported that
+> "the passive network" beats the identity baseline at −5 and 0 dB and has no
+> effect above. That arm was built with `init_scheme="scaled"`
+> (`saturation.py:119`), but the Phase 3 runner — and so every Phase 3 number —
+> uses the `Network.feedforward` default, `"uniform"`. The two passive networks
+> behave very differently. The table below is re-measured on the network Phase 3
+> actually ran, at 10 seeds; the scaled-init result is kept, labelled, because it
+> turns out to be informative (§4.2).
 
 `metrics/qrs.py` scores `neurokit2.ecg_peaks` detections against the
 cardiologist annotations in each record's `.atr` file, at the ANSI/AAMI EC57
@@ -72,34 +86,64 @@ needs context to declare its first beat and its warm-up is not a clinical miss.
 On the clean signal the detector reaches mean F1 **0.988** over 48 runs, so
 that is the ceiling any processed score is read against.
 
-Passive network minus identity baseline, paired on record, Wilcoxon
-signed-rank, Holm-Bonferroni across the five input SNRs:
+### 4.1 The Phase 3 networks against doing nothing
 
-| input SNR | n | median ΔF1 | p | p (Holm) | verdict |
-|---|---|---|---|---|---|
-| −5 dB | 16 | **+0.366** | 0.0001 | **0.0003** | advantage |
-| 0 dB | 16 | **+0.224** | 0.0076 | **0.0305** | advantage |
-| 5 dB | 16 | −0.020 | 0.90 | 1.00 | no effect |
-| 10 dB | 16 | −0.130 | 0.56 | 1.00 | no effect |
-| 20 dB | 16 | −0.064 | 0.56 | 1.00 | no effect |
+Source: `results/r2_reanalysis/qrs_rescore.db` (16 records × 5 input SNRs ×
+{0, 10, 50} epochs × 10 seeds, `configs/r2/qrs_rescore.yaml`) and
+`results/r2_reanalysis/identity_comparisons.csv`, from
+`scripts/r2_reanalysis/identity_baseline.py`, which re-scores the unprocessed
+input on exactly the windows and noise draws the networks saw. Network minus
+identity, median ΔF1 across records, Wilcoxon on record, Holm across the five
+SNRs, TOST margin ±0.05.
 
-**Phase 3's regime claim survives the metric fix, and is now supported by a
-clinical measurement with human ground truth.** Phase 3 found the SNN improves
-ΔSNR at input SNR ≤ 0 dB and degrades it at ≥ 5 dB. Annotation-referenced QRS
-F1 reproduces that boundary exactly, on an independent metric with an
-independent reference. Two different measurements, the same crossover.
+| input SNR | passive (0 ep) | 10 epochs | 50 epochs |
+|---|---|---|---|
+| −5 dB | **+0.123** (p=0.019) | **+0.406** (p=0.0002) | **+0.363** (p=0.0002) |
+| 0 dB | −0.061 (inconclusive) | **+0.364** (p=0.0006) | **+0.256** (p=0.005) |
+| 5 dB | **−0.553** (p=0.022) | +0.101 (inconclusive) | +0.011 (inconclusive) |
+| 10 dB | **−0.754** (p=0.011) | −0.011 (inconclusive) | −0.090 (inconclusive) |
+| 20 dB | **−0.756** (p=0.013) | −0.048 (inconclusive) | −0.091 (inconclusive) |
 
-What changes is the *scope* of the claim. It is not "R-peaks are preserved
-perfectly"; it is "below 0 dB the network recovers beats that are otherwise
-undetectable, and above 5 dB it neither helps nor hurts."
+Three statements follow, and they overturn the Phase 3 story rather than
+refining it.
 
-## 5. Gain calibration trades morphology for rate fidelity
+1. **The Phase 3 passive network destroys QRS recoverability above 5 dB.** At
+   10 and 20 dB input the unprocessed signal lets the detector find beats; the
+   passive network's output does not, by three quarters of the F1 scale. It helps
+   only at −5 dB, and by much less than the trained networks do.
+2. **The low-SNR advantage belongs to the trained network.** Ten epochs of STDP
+   recover beats that are otherwise undetectable at −5 and 0 dB, and are
+   indistinguishable from doing nothing above 5 dB — the same crossover Phase 3
+   reports for ΔSNR, now on an independent metric with an independent reference.
+3. **STDP repairs landmarks rather than damaging them.** See `docs/r2_findings.md`
+   §5: on the same runs, `rpeak_integrity` reports the effect of training with
+   the wrong sign.
 
-The runs include a fourth condition: the same passive network with M1b's
-per-layer gain calibration, which every mechanism experiment from M2 onward
-uses. It is catastrophic for QRS:
+"Inconclusive" at 5–20 dB for the trained networks means neither a difference
+nor equivalence within ±0.05 was established; the confidence intervals span
+roughly ±0.1–0.25, so the honest reading is "no detectable effect", not "equal".
 
-| input SNR | passive F1 | passive + calibration F1 |
+### 4.2 The scaled-init passive network (the original R1 arm)
+
+Same metric, 3 seeds, `init_scheme="scaled"`, no training:
+
+| input SNR | n | median ΔF1 vs identity | p (Holm) |
+|---|---|---|---|
+| −5 dB | 16 | +0.366 | 0.0003 |
+| 0 dB | 16 | +0.224 | 0.0305 |
+| 5 / 10 / 20 dB | 16 | −0.020 / −0.130 / −0.064 | 1.00 |
+
+An untrained network with weights drawn on `[0, 0.3]` instead of `[0, 1]`
+behaves like the *trained* uniform network, not like the untrained one. §5 says
+why.
+
+## 5. What actually preserves landmarks: a sparse output
+
+Two observations had to be reconciled. M1b's per-layer gain calibration, which
+every mechanism experiment from M2 on uses, collapses QRS F1 to about zero at
+every input SNR (scaled-init network, 3 seeds):
+
+| input SNR | scaled passive F1 | scaled passive + calibration F1 |
 |---|---|---|
 | −5 dB | 0.423 | 0.000 |
 | 0 dB | 0.464 | 0.000 |
@@ -107,23 +151,38 @@ uses. It is catastrophic for QRS:
 | 10 dB | 0.599 | 0.019 |
 | 20 dB | 0.638 | 0.022 |
 
-Calibration drives every layer to a 40 Hz mean rate. That is the right thing to
-do when the quantity of interest is a rate code — it is why M1b introduced it,
-and it is what makes the cascade measurements in M2/M3 comparable across
-configurations. It is the wrong thing to do when the quantity of interest is
-the location of a transient: flattening the rate distribution removes exactly
-the bursts that mark a QRS complex.
+And initial weight scale, which calibration exists to neutralise, decides
+whether the untrained network works at all (§4). A direct measurement on four
+records at 10 dB input, seed 0, reads both as one effect:
 
-This is the same trade-off Phase 3 §5.6.2 found for STDP (ΔSNR up, R-peaks
-down), arrived at from a different direction, and it is now visible in a
-clinical metric rather than a saturated one. **Rate fidelity and landmark
-preservation are separate objectives in this architecture, and the operating
-point that optimises one degrades the other.**
+| network | layer-1 mean weight | output rate | QRS F1 |
+|---|---|---|---|
+| uniform init, 0 epochs | 0.53 | 55–85 Hz | 0.00–0.17 |
+| scaled init, 0 epochs | 0.16 | 0.5–5 Hz | 0.55–0.88 |
+| uniform init, 10 epochs | 0.05–0.09 | 0.2–1.2 Hz | 0.00–1.00 |
+| any init, calibrated to 40 Hz | — | 40 Hz | ≈ 0 |
 
-Caveat, stated rather than buried: the calibration target used here (40 Hz,
-`tau_decode` 20 ms) was chosen for the cascade measurements, not for QRS. The
-finding is that *this* operating point trades morphology away, not that no
-calibrated operating point can preserve it. Locating one is R3's job.
+A QRS complex is recoverable from the decoded output when the output layer
+fires *sparsely* — rarely, and mostly on the complex — so the decoded trace is a
+baseline with bumps where the beats are. When it fires densely, whether because
+weights are large (uniform init), because calibration forces 40 Hz, the bursts
+that mark a beat are lost in continuous activity. STDP from uniform init
+depresses layer-1 weights by roughly an order of magnitude, which moves the
+network into the sparse regime; that is the most direct candidate for why
+training helps F1.
+
+**This is the real trade-off, and it is an operating-point trade-off, not an
+STDP trade-off.** A dense, rate-calibrated output is what the cascade
+measurements need and what reconstruction SNR rewards; a sparse output is what
+landmark detection needs. Phase 3's "STDP buys ΔSNR at the cost of R-peaks" was
+the saturated metric's rendering of this, with the sign of the R-peak half
+reversed.
+
+Stated limits: the mechanism table is four records, one seed, one input SNR,
+and the sparse regime is not sufficient on its own — record 214 after training
+fires at 0.2 Hz and scores F1 0.000, too silent to mark every beat. It is a
+hypothesis with direct supporting evidence, not an established result. Mapping
+F1 over output rate is R3 C3's second axis, and it is where this gets settled.
 
 ## 6. The distortion metrics
 
@@ -146,7 +205,7 @@ calibrated operating point can preserve it. Locating one is R3's job.
 whenever the residual is centred — pinned as a test — so reporting both costs
 nothing and buys the field's vocabulary.
 
-The passive network's `prd1` is **274–638%** across the SNR range: the residual
+The passive network's `prd1` (uncalibrated arm of `saturation.py`, scaled init) is **274–638%** across the SNR range: the residual
 carries two to six times the energy of the signal. Reported in the field's own
 terms, that is the honest scale of the reconstruction problem, and it is
 consistent with the 1.5 dB ceiling M3 derived.
@@ -158,8 +217,11 @@ consistent with the 1.5 dB ceiling M3 derived.
    published numbers are expressed in it, and removing it would make them
    unreadable rather than corrected.
 
-2. **Phase 3 §5.6.2's headline needs restating**, not retracting. A correction
-   block is appended to `docs/phase3_findings.md` §5.6.2.
+2. **Phase 3 §5.6.2's headline is retracted, not restated.** "The passive
+   network preserves R-peaks; STDP damages them" is inverted on a working metric:
+   the Phase 3 passive network destroys QRS recoverability above 5 dB, and STDP
+   restores it. Correction blocks are in `docs/phase3_findings.md` (banner and
+   §5.6.2) and `docs/r2_findings.md` §5.
 
 3. **Every future clinical claim is annotation-referenced.** `qrs_score`
    requires reference beats; there is no code path that scores detections
@@ -170,9 +232,10 @@ consistent with the 1.5 dB ceiling M3 derived.
    detector against those positions measures the generator. Ground truth here
    means a human marked it.
 
-5. **R3's operating-region work now has a second axis.** The (ΔSNR, F1)
-   trade-off surface is not a nuisance to be averaged away; §5 says the
-   architecture has two separate optima and the paper should show both.
+5. **R3's operating-region work now has a second axis.** §5 says landmark
+   recoverability depends on how sparsely the output fires, and rate
+   calibration forces the opposite. The (output rate, ΔSNR, QRS F1) surface is
+   the result to draw, not a nuisance to average away.
 
 ## 8. What R1 did not settle
 
