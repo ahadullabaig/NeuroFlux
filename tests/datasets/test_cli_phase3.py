@@ -26,10 +26,12 @@ from neuroflux_datasets.cli import (
     Phase3Config,
     _build_phase3_tasks,
     _build_tasks,
+    _resolve_reference_beats,
     _resolve_signal,
     run_experiment_command,
     run_single_experiment,
 )
+from neuroflux_datasets.mit_bih.annotator import AnnotatedSegment
 
 _FS = 250.0
 
@@ -51,15 +53,33 @@ def _make_ecg_pair(duration_s: float, fs: float = _FS) -> tuple[np.ndarray, np.n
 
 @pytest.fixture()
 def patched_make_pair(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Patch ``mit_bih.annotator.make_pair`` so no record files are touched."""
+    """Patch the annotator so no record files are touched.
+
+    Both ``make_pair`` (the signal) and ``extract_annotated_segments`` (the
+    reference beats) are replaced. Patching only the first would leave the QRS
+    scoring reading real ``.atr`` files — which passes on a machine with cached
+    records and fails in CI without them.
+    """
 
     def _fake_make_pair(
         *, duration_s: float, fs: float = _FS, **_: Any
     ) -> tuple[np.ndarray, np.ndarray]:
         return _make_ecg_pair(duration_s, fs)
 
+    def _fake_annotated(
+        record_id: str, cache_dir: Any, duration_s: float, fs: float = _FS, **_: Any
+    ) -> list[AnnotatedSegment]:
+        clean, _noisy = _make_ecg_pair(duration_s, fs)
+        # `_make_ecg_pair` peaks half-way through every one-second beat.
+        beats = np.arange(int(0.5 * fs), clean.size, int(fs), dtype=np.int64)
+        return [AnnotatedSegment(signal=clean, beats=beats, start_sample=0)]
+
     monkeypatch.setattr(
         "neuroflux_datasets.mit_bih.annotator.make_pair", _fake_make_pair
+    )
+    monkeypatch.setattr(
+        "neuroflux_datasets.mit_bih.annotator.extract_annotated_segments",
+        _fake_annotated,
     )
 
 
@@ -199,14 +219,16 @@ class TestRunSingleExperimentMitBih:
             "dataset": "mit-bih",
             "signal_type": "ecg",
             "record_id": "100",
-            "cache_dir": "data/mit_bih",
+            # Deliberately absent, so any unpatched file access fails here
+            # rather than silently passing on a machine with cached records.
+            "cache_dir": "/nonexistent/mit_bih",
             "flicker_freq": 50.0,
             "flicker_amplitude": 0.5,
             "input_snr": 10.0,
             "epochs": 1,
             "stdp_tau": 20.0,
             "seed": 0,
-            "duration_s": 1.0,
+            "duration_s": 4.0,
         }
 
     def test_returns_runresult_tagged_mit_bih(self, patched_make_pair: None) -> None:
@@ -221,6 +243,36 @@ class TestRunSingleExperimentMitBih:
         res = run_single_experiment(self._mit_bih_params())
         assert res.rpeak_integrity is not None
         assert 0.0 <= res.rpeak_integrity <= 1.0
+
+    def test_qrs_scores_are_populated(self, patched_make_pair: None) -> None:
+        """The R1 QRS columns are computed for mit-bih, and bounded."""
+        res = run_single_experiment(self._mit_bih_params())
+        for value in (res.qrs_f1, res.qrs_sensitivity, res.qrs_ppv):
+            assert value is not None
+            assert 0.0 <= value <= 1.0
+
+    def test_unmatched_jitter_is_stored_as_none_not_nan(
+        self, patched_make_pair: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SQLite has no NaN, so a window with no matches must carry None."""
+        monkeypatch.setattr(
+            "neuroflux_core.metrics.qrs.detect_rpeaks",
+            lambda *_, **__: np.empty(0, dtype=np.int64),
+        )
+        res = run_single_experiment(self._mit_bih_params())
+        assert res.qrs_f1 == 0.0
+        assert res.qrs_jitter_ms is None
+
+    def test_a_record_without_clean_windows_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The beat lookup fails loudly rather than scoring an empty reference."""
+        monkeypatch.setattr(
+            "neuroflux_datasets.mit_bih.annotator.extract_annotated_segments",
+            lambda *_, **__: [],
+        )
+        with pytest.raises(ValueError, match="no artifact-free segment"):
+            _resolve_reference_beats(self._mit_bih_params(), _FS)
 
     def test_synthetic_run_leaves_rpeak_none(self) -> None:
         """The synthetic path must NOT compute rpeak_integrity."""
@@ -237,6 +289,8 @@ class TestRunSingleExperimentMitBih:
         assert res.dataset == "synthetic"
         assert res.record_id is None
         assert res.rpeak_integrity is None
+        assert res.qrs_f1 is None
+        assert res.qrs_jitter_ms is None
 
 
 # ---------------------------------------------------------------------------

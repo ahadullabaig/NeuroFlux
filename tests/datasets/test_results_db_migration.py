@@ -106,7 +106,7 @@ class TestResultsDBMigration:
         assert row[2] == 0.95
 
     def test_fresh_db_has_all_columns(self, tmp_path: Path) -> None:
-        """A brand-new database has all 11 columns from the start."""
+        """A brand-new database has every column from the start."""
         db = ResultsDB(tmp_path / "fresh.db")
 
         cursor = db.conn.execute("PRAGMA table_info(runs)")
@@ -125,8 +125,42 @@ class TestResultsDBMigration:
             "dataset",
             "record_id",
             "rpeak_integrity",
+            "qrs_f1",
+            "qrs_sensitivity",
+            "qrs_ppv",
+            "qrs_jitter_ms",
         }
         assert columns == expected
+
+    def test_phase3_db_gains_qrs_columns(self, tmp_path: Path) -> None:
+        """An 11-column Phase 3 database is upgraded with the R1 QRS columns."""
+        db_path = tmp_path / "phase3.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """
+            CREATE TABLE runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_type TEXT, flicker_freq REAL, input_snr REAL,
+                epochs INTEGER, stdp_tau REAL, seed INTEGER, delta_snr REAL,
+                convergence_speed INTEGER, dataset TEXT DEFAULT 'synthetic',
+                record_id TEXT, rpeak_integrity REAL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO runs (signal_type, flicker_freq, input_snr, epochs, "
+            "stdp_tau, seed, delta_snr, convergence_speed, dataset, record_id, "
+            "rpeak_integrity) VALUES ('ecg', 50, 0, 10, 20, 0, 1.0, 5, "
+            "'mit-bih', '214', 1.0)"
+        )
+        conn.commit()
+        conn.close()
+
+        db = ResultsDB(db_path)
+        row = db.conn.execute(
+            "SELECT rpeak_integrity, qrs_f1, qrs_jitter_ms FROM runs"
+        ).fetchone()
+        assert row == (1.0, None, None)
 
     def test_double_migration_is_idempotent(self, tmp_path: Path) -> None:
         """Running _migrate() twice does not error or duplicate columns."""
