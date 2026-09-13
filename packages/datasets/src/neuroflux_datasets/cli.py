@@ -14,6 +14,7 @@ import yaml
 from neuroflux_core.decoders.population import PopulationDecoder
 from neuroflux_core.encoders.rate import PoissonRateEncoder
 from neuroflux_core.io.config import LIFConfig, STDPConfig
+from neuroflux_core.metrics.qrs import QrsScore
 from neuroflux_core.metrics.snr import calculate_snr
 from neuroflux_core.network.feedforward import FeedForwardNetwork, Network
 from neuroflux_core.network.simulator import Simulator
@@ -69,6 +70,27 @@ class RunResult:
     dataset: str = "synthetic"
     record_id: str | None = None
     rpeak_integrity: float | None = None
+    # R1: annotation-referenced QRS scores, replacing the saturated
+    # `rpeak_integrity`. MIT-BIH only; `qrs_jitter_ms` is None when nothing
+    # matched. See docs/r1_findings.md.
+    qrs_f1: float | None = None
+    qrs_sensitivity: float | None = None
+    qrs_ppv: float | None = None
+    qrs_jitter_ms: float | None = None
+
+
+# Columns added after the original Phase 2 schema, in the order they were
+# introduced. `_init_db` creates them and `_migrate` back-fills any an older
+# database is missing, so the two cannot drift apart.
+_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("dataset", "TEXT DEFAULT 'synthetic'"),
+    ("record_id", "TEXT"),
+    ("rpeak_integrity", "REAL"),
+    ("qrs_f1", "REAL"),
+    ("qrs_sensitivity", "REAL"),
+    ("qrs_ppv", "REAL"),
+    ("qrs_jitter_ms", "REAL"),
+)
 
 
 class ResultsDB:
@@ -93,33 +115,28 @@ class ResultsDB:
                     stdp_tau REAL,
                     seed INTEGER,
                     delta_snr REAL,
-                    convergence_speed INTEGER,
-                    dataset TEXT DEFAULT 'synthetic',
-                    record_id TEXT,
-                    rpeak_integrity REAL
+                    convergence_speed INTEGER
                 )
             """)
 
     def _migrate(self) -> None:
-        """Add missing columns to an existing pre-Phase-3 database.
+        """Add missing columns to an existing database.
 
         Uses ``PRAGMA table_info`` to detect which columns exist and
-        ``ALTER TABLE ... ADD COLUMN`` for any that are missing.  This
-        allows old 8-column ``results/full_sweep.db`` files created by
-        Phase 2 to be upgraded in place.
+        ``ALTER TABLE ... ADD COLUMN`` for any in ``_ADDED_COLUMNS`` that are
+        missing. New databases are created with the original eight columns and
+        brought up to date by this same path, so an old 8-column
+        ``results/full_sweep.db`` from Phase 2 and a fresh database end up with
+        an identical schema.
         """
         cursor = self.conn.execute("PRAGMA table_info(runs)")
         existing_columns = {row[1] for row in cursor.fetchall()}
 
-        migrations: list[str] = []
-        if "dataset" not in existing_columns:
-            migrations.append(
-                "ALTER TABLE runs ADD COLUMN dataset TEXT DEFAULT 'synthetic'"
-            )
-        if "record_id" not in existing_columns:
-            migrations.append("ALTER TABLE runs ADD COLUMN record_id TEXT")
-        if "rpeak_integrity" not in existing_columns:
-            migrations.append("ALTER TABLE runs ADD COLUMN rpeak_integrity REAL")
+        migrations = [
+            f"ALTER TABLE runs ADD COLUMN {name} {sql_type}"
+            for name, sql_type in _ADDED_COLUMNS
+            if name not in existing_columns
+        ]
 
         if migrations:
             with self.conn:
@@ -133,8 +150,9 @@ class ResultsDB:
                 INSERT INTO runs
                 (signal_type, flicker_freq, input_snr, epochs,
                  stdp_tau, seed, delta_snr, convergence_speed,
-                 dataset, record_id, rpeak_integrity)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 dataset, record_id, rpeak_integrity,
+                 qrs_f1, qrs_sensitivity, qrs_ppv, qrs_jitter_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     res.signal_type,
@@ -148,6 +166,10 @@ class ResultsDB:
                     res.dataset,
                     res.record_id,
                     res.rpeak_integrity,
+                    res.qrs_f1,
+                    res.qrs_sensitivity,
+                    res.qrs_ppv,
+                    res.qrs_jitter_ms,
                 ),
             )
 
@@ -230,6 +252,29 @@ def _resolve_signal(params: dict[str, Any], fs: float) -> tuple[np.ndarray, np.n
         flicker_amplitude=params.get("flicker_amplitude", 0.5),
         snr_db=params["input_snr"],
     )
+
+
+def _resolve_reference_beats(params: dict[str, Any], fs: float) -> np.ndarray:
+    """Cardiologist beat positions for the window ``_resolve_signal`` chose.
+
+    ``make_pair`` selects window ``seed % n_windows``; this applies the same
+    rule to the annotated extractor, so the beats and the signal are the same
+    window by construction rather than by coincidence.
+    """
+    from neuroflux_datasets.mit_bih.annotator import (  # noqa: PLC0415
+        extract_annotated_segments,
+    )
+
+    segments = extract_annotated_segments(
+        params["record_id"], params["cache_dir"], params["duration_s"], fs
+    )
+    if not segments:
+        raise ValueError(
+            f"Record {params['record_id']} has no artifact-free segment of "
+            f"{params['duration_s']}s at {fs} Hz."
+        )
+    beats: np.ndarray = segments[params["seed"] % len(segments)].beats
+    return beats
 
 
 def run_single_experiment(params: dict[str, Any]) -> RunResult:
@@ -323,12 +368,19 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
         delta_snr,
     )
 
-    # 5. Compute R-peak integrity (MIT-BIH only)
+    # 5. Clinical landmark scores (MIT-BIH only — synthetic ECG has no
+    # annotations, and scoring against the generator's own beat train would
+    # measure the generator).
     rpeak_score: float | None = None
+    qrs: QrsScore | None = None
     if dataset == "mit-bih":
+        from neuroflux_core.metrics.qrs import qrs_score  # noqa: PLC0415
         from neuroflux_core.metrics.rpeak import rpeak_integrity  # noqa: PLC0415
 
+        # Deprecated and saturated; kept so new rows stay comparable with the
+        # published Phase 3 columns. See docs/r1_findings.md.
         rpeak_score = rpeak_integrity(clean, reconstructed, fs)
+        qrs = qrs_score(_resolve_reference_beats(params, fs), reconstructed, fs)
 
     return RunResult(
         signal_type=signal_type,
@@ -342,6 +394,13 @@ def run_single_experiment(params: dict[str, Any]) -> RunResult:
         dataset=dataset,
         record_id=record_id,
         rpeak_integrity=rpeak_score,
+        qrs_f1=None if qrs is None else qrs.f1,
+        qrs_sensitivity=None if qrs is None else qrs.sensitivity,
+        qrs_ppv=None if qrs is None else qrs.ppv,
+        # SQLite has no NaN; an unmatched window stores NULL instead.
+        qrs_jitter_ms=(
+            None if qrs is None or math.isnan(qrs.rms_jitter_ms) else qrs.rms_jitter_ms
+        ),
     )
 
 

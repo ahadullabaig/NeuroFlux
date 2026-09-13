@@ -204,6 +204,10 @@ class TestResultsDB:
             "dataset",
             "record_id",
             "rpeak_integrity",
+            "qrs_f1",
+            "qrs_sensitivity",
+            "qrs_ppv",
+            "qrs_jitter_ms",
         }
         assert columns == expected
 

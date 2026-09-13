@@ -43,12 +43,20 @@ _RUN_COLUMNS: tuple[str, ...] = (
     "dataset",
     "record_id",
     "rpeak_integrity",
+    "qrs_f1",
+    "qrs_sensitivity",
+    "qrs_ppv",
+    "qrs_jitter_ms",
 )
 
 _COLUMN_DEFAULTS: dict[str, Any] = {
     "dataset": "synthetic",
     "record_id": None,
     "rpeak_integrity": None,
+    "qrs_f1": None,
+    "qrs_sensitivity": None,
+    "qrs_ppv": None,
+    "qrs_jitter_ms": None,
 }
 
 # Fields that identify a configuration. A comparison holds all of these fixed
