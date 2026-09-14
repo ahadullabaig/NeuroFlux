@@ -19,6 +19,8 @@ against and so the calibration has to be measured directly.
 See `docs/related_work.md` §C and `docs/paper_roadmap.md` R4/M1b.
 """
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from neuroflux_core.network.feedforward import FeedForwardNetwork
@@ -32,11 +34,14 @@ def measure_layer_rates(
     """
     Mean firing rate of each neuron group, in Hz.
 
-    Runs the network forward with plasticity disabled and resets its state
-    first, so the result depends only on the weights, the gains and the input.
+    Runs the network forward with plasticity disabled and resets its transient
+    state first, so the result depends only on the current weights, the gains
+    and the input. Learned weights are kept: a full `reset_state` here would
+    restore the initial weights and make calibrating a trained network silently
+    discard its training.
 
     Args:
-        network: The network to measure. Not modified.
+        network: The network to measure. Weights and gains are not modified.
         input_spikes: Boolean array of shape (T, n_input).
         dt: Timestep in ms.
 
@@ -60,7 +65,7 @@ def measure_layer_rates(
     n_steps = input_spikes.shape[0]
     counts = np.zeros(len(network.neurons), dtype=np.float64)
 
-    network.reset_state()
+    network.reset_transient_state()
     for t in range(n_steps):
         all_spikes = network.step(input_spikes[t], dt, training=False)
         # all_spikes[0] is the input; neuron groups start at index 1.
@@ -78,7 +83,7 @@ def calibrate_gain(
     network: FeedForwardNetwork,
     input_spikes: np.ndarray,
     dt: float,
-    target_rate_hz: float = 40.0,
+    target_rate_hz: float | Sequence[float] = 40.0,
     tol_hz: float = 0.5,
     max_iter: int = 30,
     bounds: tuple[float, float] = (1e-3, 5.0e3),
@@ -92,15 +97,21 @@ def calibrate_gain(
     suits a parameter spanning several orders of magnitude across widths.
 
     The calibrated gains are applied to `network` in place and also returned.
-    Plasticity is disabled throughout, so weights are untouched.
+    Plasticity is disabled throughout, so weights are untouched — including
+    learned ones, so a trained network can be recalibrated without losing its
+    training.
 
     Args:
         network: Network to calibrate. Modified in place via `set_layer_gains`.
         input_spikes: Boolean array of shape (T, n_input) — a representative
             input, ideally the same signal the experiment will run on.
         dt: Timestep in ms.
-        target_rate_hz: Firing rate each layer is driven toward.
-        tol_hz: Stop early once a layer is within this many Hz of target.
+        target_rate_hz: Firing rate each layer is driven toward — one value for
+            every layer, or one per neuron group, input-side first. Per-layer
+            targets let an output layer be held sparse while the layers feeding
+            it stay at a dense operating point.
+        tol_hz: Stop early once a layer is within this many Hz of target. It is
+            absolute, so pass a smaller value for targets of a few Hz.
         max_iter: Bisection steps per layer.
         bounds: (low, high) gain bracket. Both must be strictly positive.
 
@@ -108,8 +119,9 @@ def calibrate_gain(
         One calibrated gain per neuron group.
 
     Raises:
-        ValueError: If `target_rate_hz` is not positive, or `bounds` is not a
-            valid strictly-positive increasing bracket.
+        ValueError: If any target rate is not positive, if a per-layer target
+            list does not have one entry per neuron group, or if `bounds` is
+            not a valid strictly-positive increasing bracket.
 
     Note:
         A layer whose rate cannot reach the target within `bounds` returns the
@@ -117,15 +129,26 @@ def calibrate_gain(
         with `measure_layer_rates` — a layer that stays far from target usually
         means the input is too sparse to drive it at any gain.
     """
-    if target_rate_hz <= 0.0:
-        raise ValueError(f"target_rate_hz must be positive, got {target_rate_hz}.")
+    n_groups = len(network.neurons)
+    if isinstance(target_rate_hz, int | float):
+        targets = [float(target_rate_hz)] * n_groups
+    else:
+        targets = [float(rate) for rate in target_rate_hz]
+        if len(targets) != n_groups:
+            raise ValueError(
+                f"target_rate_hz has {len(targets)} entries but the network has "
+                f"{n_groups} neuron groups."
+            )
+    for rate in targets:
+        if rate <= 0.0:
+            raise ValueError(f"target_rate_hz must be positive, got {rate}.")
     low_bound, high_bound = bounds
     if not 0.0 < low_bound < high_bound:
         raise ValueError(f"bounds must satisfy 0 < low < high, got {bounds}.")
 
     gains = list(network.layer_gains)
 
-    for layer_idx in range(len(network.neurons)):
+    for layer_idx, target in enumerate(targets):
         low, high = low_bound, high_bound
 
         for _ in range(max_iter):
@@ -136,10 +159,10 @@ def calibrate_gain(
 
             rate = measure_layer_rates(network, input_spikes, dt)[layer_idx]
 
-            if abs(rate - target_rate_hz) < tol_hz:
+            if abs(rate - target) < tol_hz:
                 low, high = mid, mid
                 break
-            if rate < target_rate_hz:
+            if rate < target:
                 low = mid
             else:
                 high = mid

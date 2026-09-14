@@ -192,6 +192,45 @@ def test_calibrate_gain_rejects_bad_arguments() -> None:
         calibrate_gain(net, spikes, dt=1.0, bounds=(10.0, 1.0))
 
 
+def test_calibrate_gain_accepts_one_target_per_layer() -> None:
+    """An output layer can be held sparse while the layer feeding it stays dense."""
+    net = Network.feedforward(layers=[32, 16, 8], seed=42, init_scheme="scaled")
+    spikes = _input_spikes(n_steps=2000)
+    calibrate_gain(net, spikes, dt=1.0, target_rate_hz=[40.0, 5.0], tol_hz=0.1)
+    rates = measure_layer_rates(net, spikes, dt=1.0)
+    assert abs(rates[0] - 40.0) < 5.0, f"layer 1 landed at {rates[0]:.1f} Hz"
+    assert abs(rates[1] - 5.0) < 1.0, f"layer 2 landed at {rates[1]:.1f} Hz"
+
+
+def test_calibrate_gain_rejects_a_target_list_of_the_wrong_length() -> None:
+    net = Network.feedforward(layers=[32, 16, 8], seed=42)
+    with pytest.raises(ValueError, match="2 neuron groups"):
+        calibrate_gain(net, _input_spikes(), dt=1.0, target_rate_hz=[40.0])
+    with pytest.raises(ValueError, match="target_rate_hz must be positive"):
+        calibrate_gain(net, _input_spikes(), dt=1.0, target_rate_hz=[40.0, -1.0])
+
+
+def test_calibrating_a_trained_network_keeps_what_it_learned() -> None:
+    """
+    Regression guard: measuring rates used to call `reset_state`, which restores
+    the initial weights, so recalibrating after training discarded the training.
+    """
+    net = Network.feedforward(layers=[32, 16, 8], seed=42, init_scheme="scaled")
+    spikes = _drive()
+    for t in range(spikes.shape[0]):
+        net.step(spikes[t], 1.0, training=True)
+    trained = [s.weights.copy() for s in net.synapses]
+    initial = [s.initial_weights_copy.copy() for s in net.synapses]
+    assert any(
+        not np.array_equal(a, b) for a, b in zip(initial, trained, strict=True)
+    ), "training did not change any weights; the test cannot detect the reset"
+
+    calibrate_gain(net, _input_spikes(), dt=1.0, target_rate_hz=40.0)
+
+    for w_trained, synapse in zip(trained, net.synapses, strict=True):
+        np.testing.assert_array_equal(w_trained, synapse.weights)
+
+
 @pytest.mark.parametrize("n_input", [8, 32, 128])
 def test_calibrate_gain_works_across_input_widths(n_input: int) -> None:
     """
