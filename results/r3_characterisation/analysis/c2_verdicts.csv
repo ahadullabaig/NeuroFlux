@@ -1,0 +1,37 @@
+knob,signal,input,operating_point,metric,verdict,levels,largest_abs_median_diff
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,invariant,5,0.06681666725101909
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,invariant,5,0.07844668441527458
+output_width,mit-bih,clean,controlled,snr_affine_db,invariant,5,0.07629186282868095
+output_width,mit-bih,clean,controlled,qrs_f1,invariant,5,0.0003761761114702139
+output_width,mit-bih,10 dB,controlled,snr_affine_db,invariant,5,0.071052076738787
+output_width,mit-bih,10 dB,controlled,qrs_f1,invariant,5,0.0
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,matters,6,1.4745322195474495
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,matters,6,1.1151115312642728
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,matters,6,1.0571872233193425
+decoder_tau,mit-bih,clean,controlled,qrs_f1,inconclusive,6,0.019624125874125875
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,matters,6,0.9217677786273611
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,inconclusive,6,0.03602564102564103
+epochs,synthetic-ecg,clean,controlled,snr_affine_db,matters,4,0.7230073871655918
+epochs,synthetic-ecg,clean,shipped,snr_affine_db,matters,4,0.7850126716199677
+epochs,synthetic-ecg,10 dB,controlled,snr_affine_db,matters,4,0.6501012146338849
+epochs,synthetic-ecg,10 dB,shipped,snr_affine_db,matters,4,0.8317028802563426
+epochs,mit-bih,clean,controlled,snr_affine_db,matters,4,0.6402937407494039
+epochs,mit-bih,clean,controlled,qrs_f1,inconclusive,4,0.007497502497502502
+epochs,mit-bih,clean,shipped,snr_affine_db,matters,4,0.5245188211283818
+epochs,mit-bih,clean,shipped,qrs_f1,matters,4,0.6456071886489845
+epochs,mit-bih,10 dB,controlled,snr_affine_db,matters,4,0.7166480535125948
+epochs,mit-bih,10 dB,controlled,qrs_f1,invariant,4,0.025527903469079946
+epochs,mit-bih,10 dB,shipped,snr_affine_db,inconclusive,4,0.34112698192491975
+epochs,mit-bih,10 dB,shipped,qrs_f1,matters,4,0.637463133365341
+depth,synthetic-ecg,clean,controlled,snr_affine_db,matters,3,1.1221846827716435
+depth,synthetic-ecg,10 dB,controlled,snr_affine_db,matters,3,0.9557761217979148
+depth,mit-bih,clean,controlled,snr_affine_db,matters,3,0.9117297456409897
+depth,mit-bih,clean,controlled,qrs_f1,matters,3,0.12748085248085247
+depth,mit-bih,10 dB,controlled,snr_affine_db,matters,3,0.8622282403925597
+depth,mit-bih,10 dB,controlled,qrs_f1,matters,3,0.09961288711288711
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,inconclusive,5,0.3579145513013723
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,invariant,5,0.368962160620459
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,invariant,5,0.20988776392599207
+stdp_tau,mit-bih,clean,controlled,qrs_f1,inconclusive,5,0.00742424242424243
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,invariant,5,0.2648739671330938
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,invariant,5,0.0
