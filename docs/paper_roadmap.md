@@ -55,6 +55,8 @@ All figures below were measured in-session on synthetic ECG (5 s, 250 Hz, 50 Hz 
 
 **Slope d(SNR_out)/d(SNR_in): raw +0.510, affine +0.108.** Output varies 1.18 dB across the entire input range. A slope of 0 is a perfect ceiling; 1 would mean output tracks input. This is the paper's central figure.
 
+> **Superseded by R3 C1** (`docs/r3_findings.md` §1.1, Fig. 1). This table's input axis was capped near −6 dB by the flicker confound. On an uncapped axis, 4 signals × 10 seeds (16 records on MIT-BIH), three arms: slope over 10–40 dB is +0.00 to +0.09 dB/dB against the input's +0.99, every 95% CI excluding 1; over −20 to 40 dB it is +0.02 to +0.15. Rate-controlled MIT-BIH ceiling 1.92 dB.
+
 It also explains `docs/phase3_findings.md`'s headline: if SNR_out is constant, then ΔSNR = const − SNR_in falls with slope −1 automatically. The "SNN damages clean signals" finding was the ceiling seen from the wrong side.
 
 ### Finding 2 — three invariances
@@ -124,6 +126,8 @@ Finding 3 did not by itself establish that the ceiling is fundamental — both f
 | Sine | 0.08 ±0.07 |
 
 Temporal coding does **not** escape the ceiling — it is *worse*. The claim is therefore broader than "rate coding is the problem" but flatter: the limit holds across both encoders that function, both decoders, and all three signal types. The Delta rows are degenerate at the threshold used and need tuning before they can be reported as evidence either way.
+
+> **Signal table superseded by R3 C1** (`docs/r3_findings.md` §1.2). These are *trained* networks. Untrained, at the rate-controlled operating point, the ceiling is ECG 1.76 (synthetic) / 1.92 (MIT-BIH), EEG 2.29 and **sine 7.48 dB** — the ceiling is flat in input quality on every signal but its height is signal-dependent. Training silences the sine (0.07 dB, 30% of runs silent). The encoder × decoder rows are re-measured in R5.
 
 ### What remains open
 
@@ -343,36 +347,38 @@ Reporting          Every table gets an identity/control row.
 
 ---
 
-## Stage R3 — Ceiling characterisation
+## Stage R3 — Ceiling characterisation — **COMPLETE**
 
-**Duration:** 1.5 weeks
+**Duration:** 1.5 weeks budgeted; done in one session of compute and analysis.
 **Goal:** Turn the in-session probes into properly seeded, statistically supported results. This is Section IV of the paper.
+**Result:** `docs/r3_findings.md`. Code: `scripts/r3_characterisation/`. Figures and Table I: `results/r3_characterisation/figures/`.
 
 ### C1 — Flatness (the central figure)
 
-Extend Finding 1: input SNR from −20 to +40 dB in 5 dB steps, ≥ 10 seeds, on **synthetic ECG, real MIT-BIH ECG, EEG, and sine**. Report raw and affine, with the fitted slope and its CI.
-
-- [ ] Note the confound found in-session: because `add_gaussian_noise` is applied to the *already-flickered* signal, measured input SNR saturates around −6 dB regardless of the nominal knob. **Sweep flicker amplitude independently, or drop flicker for the capacity experiments**, so the input-SNR axis actually spans the range it claims to.
-- [ ] **Produces:** Fig. 1 — SNR_out vs SNR_in, four signal types, slope ≈ 0
+- [x] ~~Note the confound~~ **Fixed.** `synthetic.add_interference` sets input SNR exactly against the clean signal; flicker is kept as an interference *type* compared at matched SNR. On MIT-BIH the same confound capped Phase 3 / R1 / R2 inputs at +8.7 dB — nominal −5/0/5/10/20 dB are really −5.6/−0.9/+3.2/+6.3/+8.7 (`r3_findings.md` §1.6; banners added to those documents).
+- [x] **Fig. 1** — four signals × three arms × 10 seeds, −20 to +40 dB. Slope over 10–40 dB +0.00 to +0.09 dB/dB against the input's +0.99; **every CI excludes 1**. Ceilings (rate-controlled): MIT-BIH 1.92, synthetic ECG 1.76, EEG 2.29, **sine 7.48 dB** — flat in input, height signal-dependent.
+- [x] **The cascade law, corrected and then made exact.** Applied to affine SNR (`1 + S/N`) it over-predicts loss by ~2 dB below 10 dB — which is what M3 read as a "limiter / regime advantage", now withdrawn. In `S/N` terms, with intrinsics measured at the operating point the input sets, RMS residual is **0.02–0.04 dB on MIT-BIH over −20 to +40 dB**, nothing fitted (§1.3, §1.5).
+- [x] Flicker costs slightly less than Gaussian noise at matched SNR (+0.2 dB, equivalent within ±0.5), because a tone widens the encoder's range less (§1.4–§1.5).
 
 ### C2 — Invariances
 
-Extend Finding 2 with proper seeds and equivalence tests: output population N (4→64), decoder τ (5→160 ms), training epochs (0→200), network depth (2, 3, 4 layers), STDP τ.
+- [x] **Fig. 2, Table I.** Rate-controlled, MIT-BIH + synthetic ECG, TOST ±0.5 dB.
+  Output width 4–64: **equivalent** (+0.08 dB against +0.79 for independent neurons).
+  STDP τ 5–80 ms: **equivalent** on MIT-BIH. Decoder τ: optimum 20–40 ms, no window lifts the ceiling.
+  Depth: 2 / 3 / 4 layers = 2.75 / 1.92 / 1.57 dB, as the law requires.
+  **Training at a held rate lowers the ceiling** (−0.49 / −0.60 / −0.64 dB at 10 / 50 / 200 epochs); as shipped, training mostly moves the output from 65 Hz to ~1 Hz, which is what raises QRS F1.
 
-- [ ] **Produces:** Fig. 2 — ceiling vs each knob, with equivalence bands. Table I.
+### C3 — Operating region
 
-### C3 — Scaling fragility
-
-Extend Finding 3. Map the `(N_in, g_syn)` plane and locate the operating region where the network is neither saturated nor silent. Report mean firing rate and silent-neuron fraction across the plane.
-
-- [ ] **Produces:** Fig. 3 — a 2-D phase diagram of the usable operating region. This is likely the paper's most immediately useful figure for practitioners.
+- [x] **Fig. 3 (a, b)** — the `(N_in, g_syn)` plane, untrained and trained. Untrained: silent below g = 11.5 → 3.4 and saturated above >300 → 23 as N_in goes 8 → 256; usable band narrows from >4.7 to 2.6 octaves; shipped g = 30 leaves it at N_in ≥ 128. Trained: no usable gain at all at N_in ≥ 128.
+- [x] **Fig. 3 (c, d)** — the output-rate axis (added by R1 §5). **Sparse-output hypothesis confirmed**: QRS F1 0.77 at 1 Hz against 0.04 at 40 Hz, untrained. **The ceiling depends on output rate**: MIT-BIH 2.71 dB at 5 Hz (N = 64) against 1.99 at 40 Hz; synthetic ECG doubles at 2 Hz. Every earlier ceiling number was taken at 40 Hz.
 
 ### Acceptance criteria
 
-- Slope of SNR_out vs SNR_in has a CI excluding 1.0 on all four signal types.
-- Invariance to N and to learning rule supported by equivalence tests, not null results.
-- The operating-region map identifies the saturated and silent boundaries quantitatively.
-- Zero ceiling numbers reported without a degeneracy verdict.
+- ~~Slope of SNR_out vs SNR_in has a CI excluding 1.0 on all four signal types.~~ **Met.**
+- ~~Invariance to N and to learning rule supported by equivalence tests, not null results.~~ **Met for N and STDP τ. Refuted for the amount of learning, in the direction that strengthens the claim: training cannot lift the ceiling and lowers it at a held rate.**
+- ~~The operating-region map identifies the saturated and silent boundaries quantitatively.~~ **Met** (untrained; the trained map is reported as usable ranges because its silent region has two edges).
+- ~~Zero ceiling numbers reported without a degeneracy verdict.~~ **Met** — every row carries `verdict`.
 
 ---
 
@@ -483,12 +489,18 @@ noise-figure cascade, and it has the algebraic form of Moreno-Bote's
       **Controlled** — `calibrate_encoder_rate`; spread of encoder Λ barely changes and the
       encoder still binds on 16/16 (`docs/m3_findings.md` §8.6.3).
 
-**Where the law fails is the good news.** Below ~10 dB input it *under*-predicts by
+~~**Where the law fails is the good news.** Below ~10 dB input it *under*-predicts by
 0.8–2.8 dB — the network beats it. The encoder's clip to `[0,1]` acts as a limiter,
 compressing noise excursions but not the signal, which violates the additive-noise
 assumption in the network's favour. **This is `phase3_findings.md`'s regime advantage,
 derived**: the deviation is confined to exactly the input-SNR range where Phase 3
-measured a positive ΔSNR, and grows monotonically as input SNR falls.
+measured a positive ΔSNR, and grows monotonically as input SNR falls.~~
+
+> **Withdrawn by R3** (`docs/r3_findings.md` §1.3). The law is in `S/N`; affine-corrected SNR is
+> `1 + S/N` and cannot fall below 0 dB, so applying the law to affine values over-predicts loss
+> below 10 dB. In `S/N` terms the residual is −0.3 dB (the network does slightly *worse*), and the
+> `[0,1]` clip never engages because `v_min`/`v_max` are the drive's own extremes. Use
+> `affine_to_excess_db` before applying the law.
 
 ### M4 — The decorrelation intervention (new, opened by M3)
 
@@ -656,8 +668,11 @@ Run R0 first, and do not defer it.
 
 ## Immediate next actions
 
-**R0, R1, R2, M1a, M1b, M2 and M3 are complete.** The mechanism is derived and validated;
-what is left is power, statistics and writing.
+**R0, R1, R2, R3, M1a, M1b, M2, M3 and M4 are complete.** R3 changed three things the
+remaining stages depend on: the ceiling's height is a function of output rate (every mechanism
+number so far is at 40 Hz), the cascade law is exact only in `S/N` terms at the input's own
+operating point, and the QRS "doing nothing" baseline never filtered. Items 13–17 follow from
+those.
 
 1. ~~Run M1a~~ **Done** — the ceiling holds. See `docs/m1a_findings.md`.
 2. ~~Ship `calibrate_gain`~~ **Done** — `network/calibration.py`, per-layer gain is now a first-class concept via `NetworkConfig.layer_gains`.
@@ -686,17 +701,39 @@ what is left is power, statistics and writing.
    Eq. 4 is our column-cosine result); author lists fixed; A3 summary corrected; G3 constrains
    the DPI framing; DCPA-SNN (2026) added as the closest competitor. **D4 still blocked**
    (needs an institutional route).
-8d. **Still owed from this block:** the detector-method robustness check (R5); the output-rate
-   sweep that tests R1 §5's sparse-output hypothesis (R3 C3).
+8d. **Still owed from this block:** the detector-method robustness check (R5). ~~The output-rate
+   sweep that tests R1 §5's sparse-output hypothesis (R3 C3).~~ **Done** — confirmed; F1 0.77 at
+   1 Hz against 0.04 at 40 Hz (`r3_findings.md` §3.2).
 9. ~~Run M4's density sweep at fixed fan-in.~~ **Done** — `docs/m4_findings.md`.
-10. **Findings 2 and 5 under per-layer rate control — folded into R3 C2 and R5.** Finding 2's
-    knobs are C2's invariance sweep and Finding 5's encoder × decoder table is R5's grid; running
-    them separately now would duplicate both. Both stages must run under per-layer *and*
-    encoder rate control.
+10. ~~Findings 2 and 5 under per-layer rate control — folded into R3 C2 and R5.~~ **Finding 2
+    done in R3 C2.** Finding 5's encoder × decoder table remains R5's grid, which must run under
+    per-layer and encoder rate control **at both 40 Hz and the rate optimum** (item 13).
 11. ~~Finish R0's residual reads~~ **Mostly done (8c).** Moreno-Bote 2014 (A1) was already
     `[read]`; Kanitscheider 2015 is now read and verified. Only D4 remains, blocked on access.
 12. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
+13. **Re-check the mechanism at the rate optimum (R4).** M3's width model and M4's +3.57 dB
+    sparse-fan-in intervention were measured with every layer at 40 Hz, which R3 C3 shows is
+    not where the ECG ceiling peaks (2.71 dB at 5 Hz output, N = 64) — though it is where the
+    sine's does, and EEG is flat from 10 to 40 Hz (`r3_findings.md` §3.3), so the optimum is
+    signal-specific. Does the fan-in intervention
+    stack with a sparse output? Does width matter at a matched sparse rate (the gain plane
+    suggests 1.22 → 2.65 dB over N_in = 8 → 128, but compounded with rate)?
+14. **Encoder range normalisation is a lever (R4).** The operating point a noisy input sets costs
+    1.1 dB at 0 dB input on MIT-BIH and 5.8 dB on the sine (`r3_findings.md` §1.5), because the
+    encoder's range is the noisy drive's own min and max. Test a robust range estimate.
+15. **Rewrite the framing statement** for R3. A draft is in `docs/r3_findings.md` §4: flat in
+    input quality; height set by signal, depth and output rate; not lifted by width at a dense
+    output, by the decoder window, or by training; the cascade law exact in `S/N` terms at the
+    input's own operating point. Needs the author's read before it replaces the statement above.
+16. **Every QRS comparison is scored with and without `ecg_clean`** — R5's detector check,
+    Phase 4's baselines, and anything the manuscript says about beat recovery. A standard
+    filter gives median F1 0.92–1.00 where the best network median is 0.71 (`r3_findings.md`
+    §1.6).
 
+17. **Why training lowers the ceiling (R4).** At a held rate the loss sits mostly in layer 1,
+    whose weight columns *decorrelate* (cosine 0.76 → 0.37) — so M3's column-cosine account
+    covers only the output layer's part (`r3_findings.md` §2.6). Hypothesis: effective fan-in
+    collapse. Test with each column's participation ratio against intrinsic `S/N`.
 ---
 
 ## What success looks like

@@ -13,6 +13,20 @@ uv run python scripts/m3_bound/noise_structure.py --seeds 3
 uv run python scripts/m3_bound/weight_correlation.py --seeds 3 --width 512
 ```
 
+> **Correction (R3, `docs/r3_findings.md` §1.3) — read before §3 and §8.1.** The law is
+> derived for `S/N`, but every number here applies it to *affine-corrected* SNR, which equals
+> `1 + S/N` and cannot fall below 0 dB. That is why the law "under-predicts by 0.8–2.8 dB"
+> below 10 dB input. Applied in `S/N` terms (`affine_to_excess_db`, now in
+> `metrics/cascade.py`) the low-SNR residual is −0.3 dB, not +1.6 dB: the network does
+> slightly *worse* than the law there, not better. §3's limiter explanation is also wrong on
+> its own terms — `v_min`/`v_max` are the drive's own extremes, so the `[0, 1]` clip never
+> engages. **"The Phase 3 regime advantage, derived" is withdrawn.** The ≥ 10 dB validation,
+> the ceiling values, §4–§6 and §8.2–§8.6 are unaffected: the two forms agree to within
+> 0.1 dB once every term is well above 0 dB. Two further R3 qualifications: every number here
+> is at the 40 Hz operating point, and the ECG ceiling is higher at a sparser output
+> (`r3_findings.md` §3.2); and §4's column cosine predicts a stage's noise for *random*
+> weights but not after STDP, which decorrelates layer 1 while lowering its intrinsic SNR (§2.6).
+
 ---
 
 ## 1. A correction to M2 first
@@ -101,6 +115,9 @@ within 0.2 dB with zero free parameters.** The ceiling is not an empirical regul
 is `1/sum_k(1/Lambda_k)`, and it can be measured in a single clean-input run.
 
 ### Where the law fails, and why that is the good news
+
+> **Withdrawn — see the correction at the top.** The deviation below is the `1 + S/N` floor
+> of the affine metric, not a limiter; in `S/N` terms it is small and negative.
 
 Below ~10 dB input the model **under**-predicts by 0.8–2.8 dB: the network does better
 than the law says it should. That is a real effect and it is the one place the pipeline
@@ -224,7 +241,8 @@ by this.
 That is a derivation, a zero-parameter prediction validated on three configurations, a
 mechanism, and an actionable fix. It also absorbs Findings 1–5, M1a and M2 as special
 cases, and it explains the Phase 3 regime advantage as the one place the model's
-assumptions break.
+assumptions break. *(Withdrawn by R3 §1.3: that "explanation" was the affine metric's
+0 dB floor.)*
 
 **Section III now has real content**, and Fig. 5 (predicted vs measured) is a diagonal
 line across three configurations and six input SNRs.
@@ -272,6 +290,10 @@ uv run python scripts/m3_bound/run_m3.py --dataset mit-bih --seeds 2 \
 patient ECG, with nothing fitted.** The low-SNR deviation is the same sign and the same
 rough magnitude as on synthetic (+0.8 to +2.8 dB), so §3's limiter explanation — and with
 it the derivation of Phase 3's regime advantage — transfers to real data.
+
+> **Withdrawn (R3 §1.3).** The +1.58 dB at 3 dB input is the affine metric's `1 + S/N` floor.
+> In R3's re-measurement (C1, 16 records × 10 seeds, rate-controlled) the law applied in
+> `S/N` terms leaves a residual below 10 dB of −0.30 dB mean, 0.39 dB RMS.
 
 Measured ceiling across the 16 records: **1.71 ± 0.76 dB**, range [0.67, 3.55] (synthetic
 gave 1.45 dB). Per-record intrinsics: encoder 2.45–6.87, layer1 8.48–15.88, layer2

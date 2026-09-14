@@ -16,7 +16,7 @@
 > are reversed — see `docs/r1_findings.md` §2, §4–§5 and `docs/r2_findings.md` §5.**
 > The metric scores recall only and sets its peak-prominence floor from *each signal's own*
 > standard deviation, so it rewards densely firing outputs and cannot see noise: it moves by
-> **0.000** over a 25 dB change in input noise, scoring the unprocessed signal 1.000 at −5 dB.
+> **0.000** over a nominal 25 dB change in input noise, scoring the unprocessed signal 1.000 at −5 dB.
 > Re-measured against the cardiologist `.atr` annotations (`metrics/qrs.py`, 16 records, 10 seeds):
 > **(1)** the passive network does *not* preserve R-peaks — it destroys QRS recoverability at
 > ≥ 5 dB input (F1 −0.55 to −0.76 against doing nothing) and helps only at −5 dB; **(2)** STDP does
@@ -24,6 +24,20 @@
 > **(3)** 50 epochs is *worse* than 10 on F1 at low SNR, not better. The regime boundary for ΔSNR
 > (improves at ≤ 0 dB, degrades at ≥ 5 dB) is unaffected and is now echoed by the trained network's
 > F1 against doing nothing. ΔSNR figures throughout are unaffected.
+
+> **Correction (R3, `docs/r3_findings.md` §1.6) — input-SNR labels, and what "doing nothing"
+> means.** **(1)** Every MIT-BIH input SNR in this document (the 0, 5, 10 and 20 dB classes, and the canonical 0 dB configuration) is *nominal*. `make_pair` adds the 50 Hz
+> flicker at 0.5 amplitude first and scales the Gaussian noise to the power of the flickered
+> signal, so on unit-variance ECG the flicker alone holds the input below +9 dB. Measured against
+> the clean signal (16 records × 3 seeds), nominal −5 / 0 / 5 / 10 / 20 dB are actually
+> **−5.6 / −0.9 / +3.2 / +6.3 / +8.7 dB**. The regime boundary "improves at ≤ 0 dB, degrades at ≥ 5 dB" is, in true input SNR, "improves at ≤ −0.9 dB, degrades at ≥ +3.2 dB", and the top class is +8.7 dB, not 20. No direction reported here changes; the
+> positions on the SNR axis do. **(2)** The "unprocessed" or "doing nothing" QRS baseline runs
+> neurokit's peak detector on the raw input, which never removes the flicker. After neurokit's
+> own standard `ecg_clean` (0.5 Hz high-pass plus powerline filter) the same detector scores
+> **median F1 0.92 at nominal −5 dB and 1.00 at every other level**; the best median of any
+> NeuroFlux configuration in R2's sweep is 0.71 (10 epochs, nominal 20 dB), though single records
+> reach 0.98. Network-versus-identity QRS results are comparisons against an unfiltered detector,
+> not against conventional ECG preprocessing.
 
 **Source data:** `results/phase3_full_sweep.db` (2,560 rows). Analysis artifacts: `results/phase3_full_sig/significance_results.csv`, `results/phase3_full_sig/failure_modes.csv`, `results/phase3_full_figures/*.png`.
 
