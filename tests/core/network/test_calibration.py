@@ -9,12 +9,15 @@ these being correct, so the degeneracy guards are tested explicitly.
 import numpy as np
 import pytest
 from neuroflux_core import (
+    DeltaEncoder,
     LIFConfig,
     Network,
     NetworkConfig,
     PoissonRateEncoder,
+    calibrate_delta_threshold,
     calibrate_encoder_rate,
     calibrate_gain,
+    delta_encoder_rate_hz,
     expected_encoder_rate_hz,
     measure_layer_rates,
 )
@@ -409,3 +412,76 @@ class TestEncoderRateCalibration:
             signal, 0.0, 1.0, self.DT, target_rate_hz=40.0, tol_hz=0.0, max_iter=3
         )
         assert ceiling > 0.0
+
+
+class TestDeltaThresholdCalibration:
+    """The delta encoder's operating point, which its threshold sets."""
+
+    DT = 4.0
+
+    @staticmethod
+    def _wandering(noise: float = 0.0, n: int = 2500) -> np.ndarray:
+        rng = np.random.default_rng(3)
+        t = np.arange(n) * 0.004
+        return np.asarray(np.sin(2 * np.pi * 1.3 * t) + noise * rng.standard_normal(n))
+
+    def test_the_rate_is_what_the_encoder_actually_does(self) -> None:
+        signal = self._wandering(noise=0.05)
+        drive = np.tile(signal, (16, 1)).T
+        encoder = DeltaEncoder(0.05)
+        spikes = np.stack(
+            [encoder.encode(drive[t], self.DT) for t in range(len(drive))]
+        )
+        assert delta_encoder_rate_hz(drive, 0.05, self.DT) == pytest.approx(
+            float(spikes.mean()) * 1000.0 / self.DT
+        )
+        # Identical channels fire identically, so one column gives the same rate.
+        assert delta_encoder_rate_hz(signal, 0.05, self.DT) == pytest.approx(
+            delta_encoder_rate_hz(drive, 0.05, self.DT)
+        )
+
+    @pytest.mark.parametrize("target", [5.0, 40.0, 100.0])
+    def test_calibration_hits_the_target(self, target: float) -> None:
+        signal = self._wandering(noise=0.05)
+        threshold = calibrate_delta_threshold(signal, self.DT, target_rate_hz=target)
+        # One spike on a 10 s single channel is worth 0.1 Hz.
+        assert delta_encoder_rate_hz(signal, threshold, self.DT) == pytest.approx(
+            target, abs=0.15
+        )
+
+    def test_a_noisier_input_needs_a_higher_threshold(self) -> None:
+        # The confound this exists to remove: noise adds movement, so at a fixed
+        # threshold a noisier input fires faster.
+        quiet = calibrate_delta_threshold(self._wandering(0.01), self.DT)
+        noisy = calibrate_delta_threshold(self._wandering(0.2), self.DT)
+        assert noisy > quiet
+
+    def test_an_unreachable_target_raises(self) -> None:
+        # A channel fires at most once per step: 250 Hz at dt = 4 ms.
+        with pytest.raises(ValueError, match="unreachable"):
+            calibrate_delta_threshold(self._wandering(), self.DT, 260.0)
+
+    def test_a_constant_signal_cannot_fire(self) -> None:
+        with pytest.raises(ValueError, match="constant"):
+            calibrate_delta_threshold(np.ones(100), self.DT, 1.0)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            ({"dt": 0.0}, "dt must be positive"),
+            ({"target_rate_hz": 0.0}, "target_rate_hz must be positive"),
+        ],
+    )
+    def test_bad_arguments_raise(self, kwargs: dict[str, float], message: str) -> None:
+        arguments = {"dt": self.DT, "target_rate_hz": 40.0} | kwargs
+        with pytest.raises(ValueError, match=message):
+            calibrate_delta_threshold(
+                self._wandering(), arguments["dt"], arguments["target_rate_hz"]
+            )
+
+    def test_iteration_exhaustion_returns_the_closest_threshold_seen(self) -> None:
+        signal = self._wandering(noise=0.05)
+        coarse = calibrate_delta_threshold(signal, self.DT, 40.0, max_iter=2)
+        fine = calibrate_delta_threshold(signal, self.DT, 40.0)
+        error = abs(delta_encoder_rate_hz(signal, fine, self.DT) - 40.0)
+        assert error <= abs(delta_encoder_rate_hz(signal, coarse, self.DT) - 40.0)

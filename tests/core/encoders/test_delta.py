@@ -57,3 +57,18 @@ def test_invalid_threshold() -> None:
 def test_invalid_mode() -> None:
     with pytest.raises(ValueError, match="mode"):
         DeltaEncoder(threshold=0.1, mode="bogus")
+
+
+def test_polarity_modes_fall_silent_after_the_first_cycle() -> None:
+    # A polarity channel's baseline only follows its own spikes, so once a
+    # periodic input has set its extreme it never fires again. Documented in
+    # `DeltaEncoder` because it rules out pairing the modes as a signed code.
+    signal = np.sin(np.linspace(0.0, 20.0 * np.pi, 2000))
+    for mode in ("positive", "negative"):
+        enc = DeltaEncoder(threshold=0.1, mode=mode)
+        spikes = np.array([enc.encode(np.array([v]), dt=1.0)[0] for v in signal])
+        assert spikes[:200].any()
+        assert not spikes[200:].any()
+    enc = DeltaEncoder(threshold=0.1, mode="absolute")
+    spikes = np.array([enc.encode(np.array([v]), dt=1.0)[0] for v in signal])
+    assert spikes[1000:].sum() == spikes[:1000].sum() > 0

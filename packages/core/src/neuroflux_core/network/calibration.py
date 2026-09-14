@@ -23,6 +23,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from neuroflux_core.encoders.delta import DeltaEncoder
 from neuroflux_core.network.feedforward import FeedForwardNetwork
 
 
@@ -279,3 +280,116 @@ def calibrate_encoder_rate(
         else:
             high = mid
     return 0.5 * (low + high)
+
+
+def delta_encoder_rate_hz(
+    signal: np.ndarray, threshold: float, dt: float, mode: str = "absolute"
+) -> float:
+    """
+    Mean firing rate a `DeltaEncoder` produces on `signal`, by running it.
+
+    A delta encoder is deterministic, so its rate is exact rather than
+    expected, but it depends on the whole path of the signal through the
+    per-channel baselines and has no closed form.
+
+    Args:
+        signal: The analog drive, shape `(T,)` for one channel or
+            `(T, n_channels)`.
+        threshold: Encoder threshold.
+        dt: Time step in ms.
+        mode: Encoder mode; see `DeltaEncoder`.
+
+    Returns:
+        Spikes per second per channel, averaged over channels and all `T`
+        steps, including the first, on which the encoder cannot fire.
+    """
+    values = np.asarray(signal, dtype=np.float64)
+    if values.ndim == 1:
+        values = values[:, None]
+    encoder = DeltaEncoder(threshold, mode)
+    count = 0
+    for t in range(values.shape[0]):
+        count += int(np.count_nonzero(encoder.encode(values[t], dt)))
+    return count / values.size * 1000.0 / dt
+
+
+def calibrate_delta_threshold(
+    signal: np.ndarray,
+    dt: float,
+    target_rate_hz: float = 40.0,
+    mode: str = "absolute",
+    tol_hz: float = 0.1,
+    max_iter: int = 60,
+) -> float:
+    """
+    The `DeltaEncoder` threshold that fires at `target_rate_hz` on `signal`.
+
+    A delta encoder's rate is set by how far the signal moves, not by where it
+    sits, so a fixed threshold gives rates that differ by signal, by record and
+    by input noise: noise adds movement, so a noisier input fires more. Holding
+    the rate puts the delta encoder at the same operating point as a
+    rate-calibrated `PoissonRateEncoder`.
+
+    The rate falls as the threshold rises, though not strictly — it is a step
+    function of the threshold and the baseline path can make neighbouring
+    thresholds swap order — so the search keeps the closest threshold it has
+    evaluated rather than trusting the final bracket.
+
+    Args:
+        signal: The analog drive the encoder will see, `(T,)` or
+            `(T, n_channels)`.
+        dt: Time step in ms.
+        target_rate_hz: Desired mean rate per channel.
+        mode: Encoder mode; see `DeltaEncoder`.
+        tol_hz: Stop when the rate is within this of the target. On a
+            single-channel signal of `T` steps one spike is worth
+            `1000 / (T * dt)` Hz, so a tolerance below that is reached only by
+            chance.
+        max_iter: Bisection iterations, on a logarithmic scale.
+
+    Returns:
+        The threshold whose rate was closest to the target.
+
+    Raises:
+        ValueError: If `dt` or `target_rate_hz` is not positive, or if the
+            target exceeds the rate at the smallest threshold that
+            distinguishes any two consecutive samples.
+    """
+    if dt <= 0.0:
+        raise ValueError(f"dt must be positive, got {dt}.")
+    if target_rate_hz <= 0.0:
+        raise ValueError(f"target_rate_hz must be positive, got {target_rate_hz}.")
+
+    values = np.asarray(signal, dtype=np.float64)
+    steps = np.abs(np.diff(values, axis=0))
+    moving = steps[steps > 0.0]
+    if moving.size == 0:
+        raise ValueError(
+            f"target_rate_hz={target_rate_hz} is unreachable: the signal is "
+            "constant, so a delta encoder never fires."
+        )
+    # At or below the smallest step every change fires; above the full range
+    # nothing can.
+    low = float(moving.min())
+    high = float(np.ptp(values)) * 2.0
+    ceiling_hz = delta_encoder_rate_hz(values, low, dt, mode)
+    if target_rate_hz > ceiling_hz:
+        raise ValueError(
+            f"target_rate_hz={target_rate_hz} is unreachable: at dt={dt} ms this "
+            f"signal can drive at most {ceiling_hz:.1f} Hz."
+        )
+
+    best, best_error = low, abs(ceiling_hz - target_rate_hz)
+    for _ in range(max_iter):
+        mid = float(np.sqrt(low * high))
+        rate = delta_encoder_rate_hz(values, mid, dt, mode)
+        error = abs(rate - target_rate_hz)
+        if error < best_error:
+            best, best_error = mid, error
+        if error < tol_hz:
+            break
+        if rate > target_rate_hz:
+            low = mid
+        else:
+            high = mid
+    return best
