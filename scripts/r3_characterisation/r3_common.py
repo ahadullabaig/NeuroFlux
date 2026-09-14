@@ -76,7 +76,7 @@ from neuroflux_datasets.synthetic import (
     generate_eeg,
     generate_sine,
 )
-from scipy.signal import lfilter  # type: ignore[import-untyped]
+from scipy.signal import butter, filtfilt, lfilter  # type: ignore[import-untyped]
 
 FS = 250.0
 DT = 1000.0 / FS
@@ -112,7 +112,20 @@ SIGNALS: tuple[str, ...] = ("synthetic-ecg", "mit-bih", "eeg", "sine")
 OPERATING_POINTS: tuple[str, ...] = ("shipped", "controlled")
 
 
-_LATE_FIELDS: frozenset[str] = frozenset({"calibrate_at_snr_db"})
+_LATE_FIELDS: frozenset[str] = frozenset(
+    {"calibrate_at_snr_db", "encoder_range", "fan_in"}
+)
+
+# How the encoder's [v_min, v_max] is chosen (R4b, roadmap next action 14).
+#   None        the drive's own minimum and maximum — every R3 grid;
+#   percentile  its 0.1st and 99.9th percentiles, which ignore the extreme
+#               noise samples but clip the tips of the tallest QRS peaks;
+#   lowpass     the extremes of a zero-phase 40 Hz low-pass copy, which drops
+#               most broadband noise but keeps the ECG's band;
+#   oracle      the clean signal's extremes — not deployable, an upper bound.
+ENCODER_RANGES: tuple[str, ...] = ("percentile", "lowpass", "oracle")
+RANGE_PERCENTILE = 0.1
+RANGE_LOWPASS_HZ = 40.0
 
 
 @dataclass(frozen=True)
@@ -143,6 +156,11 @@ class Spec:
     # point a noisy s dB input sets*, which is what the cascade law needs if
     # that operating point moves with the noise.
     calibrate_at_snr_db: float | None = None
+    # R4b: see ENCODER_RANGES.
+    encoder_range: str | None = None
+    # R4b: exact number of non-zero inputs per first-layer neuron (M4's scheme);
+    # None keeps the dense initialisation.
+    fan_in: int | None = None
 
     def key(self) -> str:
         """
@@ -183,6 +201,8 @@ class Row:
     input_snr_db: float
     input_affine_db: float
     calibrate_at_snr_db: float
+    encoder_range: str
+    fan_in: int
     g_syn: float
     encoder_max_hz: float
     layer_rate_targets_hz: str
@@ -267,6 +287,48 @@ def readout(
     return np.asarray((v_min + clipped * (v_max - v_min)).mean(axis=1))
 
 
+def encoder_bounds(
+    drive: np.ndarray, clean: np.ndarray, method: str | None
+) -> tuple[float, float]:
+    """The encoder's `[v_min, v_max]` from a 1-D drive, by `ENCODER_RANGES` method."""
+    if method is None:
+        low, high = float(np.min(drive)), float(np.max(drive))
+    elif method == "percentile":
+        low = float(np.percentile(drive, RANGE_PERCENTILE))
+        high = float(np.percentile(drive, 100.0 - RANGE_PERCENTILE))
+    elif method == "lowpass":
+        b, a = butter(4, RANGE_LOWPASS_HZ / (FS / 2.0))
+        smooth = filtfilt(b, a, drive)
+        low, high = float(np.min(smooth)), float(np.max(smooth))
+    elif method == "oracle":
+        low, high = float(np.min(clean)), float(np.max(clean))
+    else:
+        raise ValueError(
+            f"Unknown encoder range {method!r}; expected {ENCODER_RANGES}."
+        )
+    if high <= low:
+        high = low + 1.0
+    return low, high
+
+
+def fixed_fan_in_weights(
+    n_pre: int, n_post: int, fan_in: int, rng: np.random.Generator
+) -> np.ndarray:
+    """
+    Uniform[0, 1] weights with exactly `fan_in` non-zero inputs per neuron.
+
+    Copied from `scripts/m4_decorrelation/density_sweep.py` so R4b's fan-in runs
+    use M4's construction; the scripts tree is not an importable package.
+    """
+    if not 1 <= fan_in <= n_pre:
+        raise ValueError(f"fan_in must be in [1, {n_pre}], got {fan_in}")
+    weights = np.zeros((n_pre, n_post), dtype=np.float32)
+    for post in range(n_post):
+        chosen = rng.choice(n_pre, size=fan_in, replace=False)
+        weights[chosen, post] = rng.uniform(0.0, 1.0, size=fan_in)
+    return weights
+
+
 def _calibration_spikes(
     drive: np.ndarray,
     v_min: float,
@@ -334,10 +396,7 @@ def run_spec(
             )
         )
         calibration_drive = np.tile(reference, (spec.layers[0], 1)).T
-    v_min = float(np.min(calibration_drive))
-    v_max = float(np.max(calibration_drive))
-    if v_max <= v_min:
-        v_max = v_min + 1.0
+    v_min, v_max = encoder_bounds(calibration_drive[:, 0], clean, spec.encoder_range)
 
     targets = (
         list(spec.layer_rates_hz)
@@ -363,6 +422,17 @@ def run_spec(
         seed=spec.seed,
         init_scheme=spec.init_scheme,
     )
+    if spec.fan_in is not None:
+        weights = fixed_fan_in_weights(
+            spec.layers[0],
+            spec.layers[1],
+            spec.fan_in,
+            np.random.default_rng(np.random.SeedSequence([spec.seed, 30_000])),
+        )
+        first = net.synapses[0]
+        first.weights = weights.copy()
+        # `reset_state` restores from this copy, so it must carry the new matrix.
+        first.initial_weights_copy = weights.copy()
     encoder = PoissonRateEncoder(
         v_min=v_min, v_max=v_max, max_firing_rate_hz=encoder_max_hz, rng=encoder_rng
     )
@@ -487,6 +557,8 @@ def run_spec(
                     if spec.calibrate_at_snr_db is None
                     else spec.calibrate_at_snr_db
                 ),
+                encoder_range=spec.encoder_range or "minmax",
+                fan_in=0 if spec.fan_in is None else spec.fan_in,
                 g_syn=math.nan if controlled else spec.g_syn,
                 encoder_max_hz=encoder_max_hz,
                 layer_rate_targets_hz=_join(targets) if controlled else "",
