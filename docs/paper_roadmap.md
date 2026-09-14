@@ -142,19 +142,32 @@ statistics (R2), and the manuscript.
 
 ## Framing statement
 
-> Rate-coded spiking reconstruction pipelines impose an output quality ceiling that is
-> independent of input quality, population size, decoder integration window, and learning
-> rule. We show the ceiling follows from a cascade law — inverse SNRs add across pipeline
-> stages — and that each stage's contribution is capped by the mean pairwise error
-> correlation among its neurons. That correlation is fixed at 3/4 by any non-negative
-> weight initialisation, before training and independently of synaptic scale, which is why
-> gain normalisation cannot lift the ceiling. Decorrelating the weight columns lifts it by
-> 3.67 dB.
+**Adopted after R3** (drafted in `docs/r3_findings.md` §4, reviewed by the author):
 
-*(Superseded framing, kept for the record: "We measure the ceiling, identify the binding
-constraint, and show that the architecture cannot be scaled past it without explicit gain
-normalisation." M1b showed gain normalisation fixes the degeneracy but not the ceiling,
-and M3 derived why.)*
+> Rate-coded spiking reconstruction pipelines have an output quality ceiling that is flat in
+> input quality (slope ≤ 0.09 dB/dB above 10 dB input on four signals, and a cascade law that
+> holds at every output rate tested). Its height is set by the signal, the depth and the
+> output firing rate; it is not lifted by a wider output population at a dense output, by any
+> decoder window, or by unsupervised learning, which lowers it at a held rate. An inverse-SNR
+> cascade law predicts the output to within 0.04 dB RMS on real ECG from −20 to +40 dB input,
+> with no fitted parameters, once it is applied to signal-to-noise power and to the operating
+> point the input itself sets.
+
+**Mechanism, confirmed at R3's operating points by R4b** (`docs/r4b_findings.md` §4):
+
+> Each stage's intrinsic SNR is limited by the error its neurons share, which is set by how many
+> inputs they draw on and how much those inputs overlap: a dense non-negative random draw makes
+> every pair of weight columns 3/4 similar, and too few effective inputs leaves each neuron
+> noisy. Restricting each neuron to a fixed fan-in of 8–16 lifts the ceiling at every output
+> rate tested, by up to 1.85 dB (5.77 dB on real ECG); unsupervised STDP instead collapses
+> layer-1 effective fan-in from 24 inputs to 3, which is why learning lowers the ceiling.
+
+*(Superseded framings, kept for the record. Before R3: "Rate-coded spiking reconstruction
+pipelines impose an output quality ceiling that is independent of input quality, population
+size, decoder integration window, and learning rule … Decorrelating the weight columns lifts it
+by 3.67 dB." Earlier still: "We measure the ceiling, identify the binding constraint, and show
+that the architecture cannot be scaled past it without explicit gain normalisation." M1b showed
+gain normalisation fixes the degeneracy but not the ceiling, and M3 derived why.)*
 
 **Audience:** anyone building rate-coded neuromorphic signal-processing pipelines. The contribution is a limitation others will hit, with the mechanism quantified and a diagnostic protocol they can run.
 
@@ -711,29 +724,40 @@ those.
 11. ~~Finish R0's residual reads~~ **Mostly done (8c).** Moreno-Bote 2014 (A1) was already
     `[read]`; Kanitscheider 2015 is now read and verified. Only D4 remains, blocked on access.
 12. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
-13. **Re-check the mechanism at the rate optimum (R4).** M3's width model and M4's +3.57 dB
+13. ~~Re-check the mechanism at the rate optimum (R4).~~ **Done (R4b §3)** — both predictions
+    supported. Width slope +0.28 dB/doubling at a 5 Hz output against +0.20 at 40 Hz (p = 0.008);
+    M4's fan-in gain holds at every rate and peaks at 20 Hz (+1.85 dB, `[512,512]` K = 16,
+    ceiling 5.77 dB). *Original item:* M3's width model and M4's +3.57 dB
     sparse-fan-in intervention were measured with every layer at 40 Hz, which R3 C3 shows is
     not where the ECG ceiling peaks (2.71 dB at 5 Hz output, N = 64) — though it is where the
     sine's does, and EEG is flat from 10 to 40 Hz (`r3_findings.md` §3.3), so the optimum is
     signal-specific. Does the fan-in intervention
     stack with a sparse output? Does width matter at a matched sparse rate (the gain plane
     suggests 1.22 → 2.65 dB over N_in = 8 → 128, but compounded with rate)?
-14. **Encoder range normalisation is a lever (R4).** The operating point a noisy input sets costs
+14. ~~Encoder range normalisation is a lever (R4).~~ **Tested (R4b §2) — primary test not met.**
+    A 40 Hz low-pass range gains +0.35 dB at 0 dB on MIT-BIH (below the +0.5 bar) and 1.0–1.4 dB
+    on the sine, with no ceiling cost; even the oracle range recovers only 0.69 of the 1.11 dB.
+    *Original item:* The operating point a noisy input sets costs
     1.1 dB at 0 dB input on MIT-BIH and 5.8 dB on the sine (`r3_findings.md` §1.5), because the
     encoder's range is the noisy drive's own min and max. Test a robust range estimate.
-15. **Rewrite the framing statement** for R3. A draft is in `docs/r3_findings.md` §4: flat in
-    input quality; height set by signal, depth and output rate; not lifted by width at a dense
-    output, by the decoder window, or by training; the cascade law exact in `S/N` terms at the
-    input's own operating point. Needs the author's read before it replaces the statement above.
+15. ~~Rewrite the framing statement for R3.~~ **Done** — the §4 draft was reviewed and adopted
+    above; the mechanism sentences wait for R4b.
 16. **Every QRS comparison is scored with and without `ecg_clean`** — R5's detector check,
     Phase 4's baselines, and anything the manuscript says about beat recovery. A standard
     filter gives median F1 0.92–1.00 where the best network median is 0.71 (`r3_findings.md`
     §1.6).
 
-17. **Why training lowers the ceiling (R4).** At a held rate the loss sits mostly in layer 1,
+17. ~~Why training lowers the ceiling (R4).~~ **Done (R4b §1) — supported.** Layer-1 effective
+    fan-in falls 24.3 → 2.6 inputs and its change tracks layer-1 intrinsic `S/N` at ρ = +0.79
+    (p = 4 × 10⁻¹¹) on MIT-BIH, against +0.11 for cosine; on synthetic ECG the two are confounded.
+    *Original item:* At a held rate the loss sits mostly in layer 1,
     whose weight columns *decorrelate* (cosine 0.76 → 0.37) — so M3's column-cosine account
     covers only the output layer's part (`r3_findings.md` §2.6). Hypothesis: effective fan-in
     collapse. Test with each column's participation ratio against intrinsic `S/N`.
+18. **Open from R4b:** does a fan-in constraint *during* STDP prevent the collapse, so learning
+    helps instead of hurting? And how much of the operating-point cost do the encoder-rate and
+    layer-gain calibrations carry? Candidates for R5's topology arm or the manuscript's
+    limitations.
 ---
 
 ## What success looks like
