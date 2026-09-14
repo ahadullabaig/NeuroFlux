@@ -18,8 +18,17 @@ class DeltaEncoder(BaseEncoder):
         "positive" — fire on ``x - baseline ≥ threshold``.
         "negative" — fire on ``x - baseline ≤ -threshold``.
 
-    For sign-aware decoding, instantiate two encoders (one positive, one
-    negative) and concatenate their outputs.
+    The polarity modes are not two halves of a signed code. A channel's
+    baseline moves only when *that* channel fires, so a "positive" channel
+    fires only when the input climbs a threshold above the level of its last
+    spike: after a peak it stays silent until the input exceeds that peak. On
+    a periodic signal it falls silent after the first cycle, and a positive
+    and a negative encoder side by side cannot be integrated back into the
+    input. "absolute" mode tracks the input in both directions but discards
+    the sign, so its firing rate follows `|dx/dt|`, not `x`.
+
+    `calibrate_delta_threshold` finds the threshold that fires at a target
+    mean rate on a given signal.
 
     The encoder emits no spikes on the very first call (baseline initialization).
     """
