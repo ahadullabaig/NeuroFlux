@@ -2,10 +2,13 @@
 
 import numpy as np
 import pytest
+from neuroflux_core.metrics.snr import calculate_snr
 from neuroflux_datasets.synthetic import (
+    InterferenceKind,
     SignalGenerator,
     add_flicker,
     add_gaussian_noise,
+    add_interference,
     generate_ecg,
     generate_eeg,
     generate_sine,
@@ -240,6 +243,78 @@ class TestAddGaussianNoise:
         noisy = add_gaussian_noise(sig, 0.0, rng=np.random.default_rng(0))
         # At 0 dB, noise power ≈ signal power → large differences
         assert np.mean((noisy - sig) ** 2) > 0.1
+
+
+class TestAddInterference:
+    """Tests for add_interference() — the R3 fix for the flicker SNR confound."""
+
+    @pytest.mark.parametrize("kind", ["gaussian", "flicker", "mixed"])
+    @pytest.mark.parametrize("snr_db", [-20.0, 0.0, 17.5, 40.0])
+    def test_input_snr_is_exact(self, kind: InterferenceKind, snr_db: float) -> None:
+        clean = generate_ecg(duration_s=4.0, fs=250.0)
+        noisy = add_interference(clean, snr_db, kind=kind, rng=np.random.default_rng(0))
+        assert calculate_snr(clean, noisy) == pytest.approx(snr_db, abs=1e-9)
+
+    def test_high_snr_is_reachable_on_the_axis_the_old_pipeline_capped(self) -> None:
+        """
+        SignalGenerator with 0.5-amplitude flicker cannot exceed about -6 dB on
+        ECG against the clean signal, whatever `snr_db` asks for.
+        """
+        clean, capped = SignalGenerator(fs=250.0, seed=0).generate(
+            "ecg", 4.0, flicker_freq=50.0, flicker_amplitude=0.5, snr_db=40.0
+        )
+        assert calculate_snr(clean, capped) < 0.0
+        fixed = add_interference(
+            clean, 40.0, kind="mixed", rng=np.random.default_rng(0)
+        )
+        assert calculate_snr(clean, fixed) == pytest.approx(40.0, abs=1e-9)
+
+    def test_flicker_is_a_sinusoid_at_the_requested_frequency(self) -> None:
+        fs, freq = 250.0, 50.0
+        clean = np.zeros(1000) + np.sin(np.linspace(0, 8 * np.pi, 1000))
+        noisy = add_interference(
+            clean,
+            0.0,
+            kind="flicker",
+            fs=fs,
+            flicker_freq=freq,
+            rng=np.random.default_rng(1),
+        )
+        spectrum = np.abs(np.fft.rfft(noisy - clean))
+        peak_hz = np.fft.rfftfreq(clean.size, d=1.0 / fs)[int(np.argmax(spectrum))]
+        assert peak_hz == pytest.approx(freq, abs=fs / clean.size)
+
+    def test_mixed_interference_splits_power_between_its_parts(self) -> None:
+        fs = 250.0
+        clean = generate_ecg(duration_s=8.0, fs=fs)
+        noisy = add_interference(
+            clean, 0.0, kind="mixed", fs=fs, rng=np.random.default_rng(2)
+        )
+        spectrum = np.abs(np.fft.rfft(noisy - clean)) ** 2
+        freqs = np.fft.rfftfreq(clean.size, d=1.0 / fs)
+        tone = spectrum[np.abs(freqs - 50.0) <= 0.5].sum() / spectrum.sum()
+        assert 0.4 < tone < 0.6, f"flicker carries {tone:.2f} of the power"
+
+    def test_reproducible_and_phase_varies_with_the_seed(self) -> None:
+        clean = generate_ecg(duration_s=2.0, fs=250.0)
+        a = add_interference(clean, 5.0, "flicker", rng=np.random.default_rng(3))
+        b = add_interference(clean, 5.0, "flicker", rng=np.random.default_rng(3))
+        c = add_interference(clean, 5.0, "flicker", rng=np.random.default_rng(4))
+        np.testing.assert_array_equal(a, b)
+        assert not np.allclose(a, c)
+
+    def test_constant_signal_returns_an_unmodified_copy(self) -> None:
+        clean = np.full(100, 3.0)
+        out = add_interference(clean, 10.0)
+        np.testing.assert_array_equal(out, clean)
+        assert out is not clean
+
+    def test_bad_arguments_raise(self) -> None:
+        clean = generate_ecg(duration_s=1.0, fs=250.0)
+        with pytest.raises(ValueError, match="finite"):
+            add_interference(clean, float("inf"))
+        with pytest.raises(ValueError, match="Unknown interference kind"):
+            add_interference(clean, 0.0, kind="pink")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

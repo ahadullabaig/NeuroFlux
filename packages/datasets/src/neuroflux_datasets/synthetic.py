@@ -124,6 +124,76 @@ def add_gaussian_noise(
     return signal + noise
 
 
+InterferenceKind = Literal["gaussian", "flicker", "mixed"]
+
+
+def add_interference(
+    signal: np.ndarray,
+    snr_db: float,
+    kind: InterferenceKind = "gaussian",
+    fs: float = 250.0,
+    flicker_freq: float = 50.0,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
+    """
+    Add interference scaled so the input SNR is exactly `snr_db`.
+
+    `SignalGenerator.generate` adds flicker at a fixed amplitude and then scales
+    Gaussian noise to the power of the *already-flickered* signal. The flicker
+    alone then caps the SNR the result can have against the clean signal — at
+    0.5 amplitude on ECG, near −6 dB — so a nominal 20 or 40 dB input is really
+    a −6 dB one (`docs/paper_roadmap.md` R3 C1). Here the whole interference is
+    scaled against the clean signal, and the realised draw is rescaled to its
+    exact target variance, so `calculate_snr(signal, result)` equals `snr_db`
+    rather than approximating it. That makes input SNR a set value on an
+    experiment's axis rather than a sampled one.
+
+    Args:
+        signal: Clean signal.
+        snr_db: Target SNR in dB, as `calculate_snr` defines it (variance of
+            the clean signal over variance of the interference).
+        kind: `"gaussian"` for white noise; `"flicker"` for a sinusoid at
+            `flicker_freq` with a random phase; `"mixed"` for equal-power
+            parts of both. Comparing kinds at one `snr_db` asks whether the
+            pipeline treats periodic interference differently from broadband.
+        fs: Sampling rate in Hz, used for the flicker.
+        flicker_freq: Flicker frequency in Hz.
+        rng: Random generator for the noise draw and the flicker phase.
+
+    Returns:
+        The signal plus interference, as a new array.
+
+    Raises:
+        ValueError: If `snr_db` is not finite or `kind` is unknown.
+    """
+    if not np.isfinite(snr_db):
+        raise ValueError(f"snr_db must be finite, got {snr_db}.")
+    if kind not in ("gaussian", "flicker", "mixed"):
+        raise ValueError(f"Unknown interference kind: {kind!r}")
+
+    clean = np.asarray(signal, dtype=np.float64)
+    target_var = float(np.var(clean)) / 10 ** (snr_db / 10.0)
+    if target_var == 0.0 or clean.size < 2:
+        return clean.copy()
+
+    gen = rng if rng is not None else np.random.default_rng()
+    t = np.arange(clean.size) / fs
+    parts: list[np.ndarray] = []
+    if kind in ("gaussian", "mixed"):
+        parts.append(gen.normal(0.0, 1.0, size=clean.size))
+    if kind in ("flicker", "mixed"):
+        parts.append(np.sin(2 * np.pi * flicker_freq * t + gen.uniform(0, 2 * np.pi)))
+
+    # Unit-variance parts summed with equal weight, then the sum rescaled, so a
+    # mixed draw is equal-power by construction and exact in total.
+    interference = np.zeros_like(clean)
+    for part in parts:
+        interference += part / np.std(part)
+    interference *= np.sqrt(target_var / np.var(interference))
+    result: np.ndarray = clean + interference
+    return result
+
+
 class SignalGenerator:
     """Unified pipeline API for composing clean and noisy signals."""
 
