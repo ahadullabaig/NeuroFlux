@@ -138,3 +138,6 @@ data/
 .claude/
 # R3 raw grids: the gzipped copies are committed; the plain CSVs a grid writes are not.
 results/r3_characterisation/*.csv
+
+# R4b raw grids, as for R3.
+results/r4b_mechanism/*.csv
