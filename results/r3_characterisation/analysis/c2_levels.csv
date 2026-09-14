@@ -1,0 +1,163 @@
+knob,signal,input,operating_point,metric,level,n_units,median,ok_fraction,out_rate_median
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,4.0,10,1.6251879679180514,1.0,40.45
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,8.0,10,1.7623957932860799,1.0,40.53125
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,16.0,10,1.8076198339714147,1.0,40.4125
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,32.0,10,1.792965349449854,1.0,40.25625
+output_width,synthetic-ecg,clean,controlled,snr_affine_db,64.0,10,1.813343065352405,1.0,40.6546875
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,4.0,10,1.3018209818047284,1.0,40.45
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,8.0,10,1.3590793080216192,1.0,40.55625
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,16.0,10,1.3823388750653716,1.0,40.4375
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,32.0,10,1.3963701755879556,1.0,40.546875
+output_width,synthetic-ecg,10 dB,controlled,snr_affine_db,64.0,10,1.427999680185175,1.0,40.44921875
+output_width,mit-bih,clean,controlled,snr_affine_db,4.0,16,1.8383292854553939,1.0,40.01375
+output_width,mit-bih,clean,controlled,snr_affine_db,8.0,16,1.9186280241744278,1.0,40.17375
+output_width,mit-bih,clean,controlled,snr_affine_db,16.0,16,1.9614198722913767,1.0,40.038125
+output_width,mit-bih,clean,controlled,snr_affine_db,32.0,16,1.9833547705371761,1.0,40.27875
+output_width,mit-bih,clean,controlled,snr_affine_db,64.0,16,1.9920513359179632,1.0,40.21625
+output_width,mit-bih,clean,controlled,qrs_f1,4.0,16,0.054232238349885414,1.0,40.01375
+output_width,mit-bih,clean,controlled,qrs_f1,8.0,16,0.057692307692307696,1.0,40.17375
+output_width,mit-bih,clean,controlled,qrs_f1,16.0,16,0.05448773448773449,1.0,40.038125
+output_width,mit-bih,clean,controlled,qrs_f1,32.0,16,0.0629004329004329,1.0,40.27875
+output_width,mit-bih,clean,controlled,qrs_f1,64.0,16,0.054402264402264394,1.0,40.21625
+output_width,mit-bih,10 dB,controlled,snr_affine_db,4.0,16,1.3921661457215748,1.0,39.908750000000005
+output_width,mit-bih,10 dB,controlled,snr_affine_db,8.0,16,1.4742765269231648,1.0,39.78625
+output_width,mit-bih,10 dB,controlled,snr_affine_db,16.0,16,1.5066839562670982,1.0,39.7603125
+output_width,mit-bih,10 dB,controlled,snr_affine_db,32.0,16,1.517862329297334,1.0,39.8528125
+output_width,mit-bih,10 dB,controlled,snr_affine_db,64.0,16,1.5317656953041279,1.0,39.84125
+output_width,mit-bih,10 dB,controlled,qrs_f1,4.0,16,0.019444444444444445,1.0,39.908750000000005
+output_width,mit-bih,10 dB,controlled,qrs_f1,8.0,16,0.044478021978021975,1.0,39.78625
+output_width,mit-bih,10 dB,controlled,qrs_f1,16.0,16,0.03511655011655011,1.0,39.7603125
+output_width,mit-bih,10 dB,controlled,qrs_f1,32.0,16,0.027136752136752137,1.0,39.8528125
+output_width,mit-bih,10 dB,controlled,qrs_f1,64.0,16,0.03141025641025641,1.0,39.84125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,5.0,10,0.6951408497267876,1.0,40.53125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,10.0,10,0.9741683505058465,1.0,40.53125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,20.0,10,1.7623957932860799,1.0,40.53125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,40.0,10,1.5233924920004829,1.0,40.53125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,80.0,10,0.7941131979706897,1.0,40.53125
+decoder_tau,synthetic-ecg,clean,controlled,snr_affine_db,160.0,10,0.2851795811211382,1.0,40.53125
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,5.0,10,0.4858003397801258,1.0,40.55625
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,10.0,10,0.7028194719453043,1.0,40.55625
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,20.0,10,1.3590793080216192,1.0,40.55625
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,40.0,10,1.2760529062727457,1.0,40.55625
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,80.0,10,0.7259894075747014,1.0,40.55625
+decoder_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,160.0,10,0.2503447256217996,1.0,40.55625
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,5.0,16,0.8069712081436788,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,10.0,16,1.1125327835364267,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,20.0,16,1.9186280241744278,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,40.0,16,1.97787714798481,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,80.0,16,1.3405707829884772,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,snr_affine_db,160.0,16,0.7559664857337254,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,5.0,16,0.05333333333333333,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,10.0,16,0.04666666666666666,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,20.0,16,0.057692307692307696,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,40.0,16,0.07118548118548118,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,80.0,16,0.05934065934065934,1.0,40.17375
+decoder_tau,mit-bih,clean,controlled,qrs_f1,160.0,16,0.02111111111111111,1.0,40.17375
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,5.0,16,0.500202937539836,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,10.0,16,0.7688927624032171,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,20.0,16,1.4742765269231648,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,40.0,16,1.7007516927000275,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,80.0,16,1.1869341422343394,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,snr_affine_db,160.0,16,0.639018601476913,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,5.0,16,0.032051282051282055,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,10.0,16,0.01666666666666667,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,20.0,16,0.044478021978021975,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,40.0,16,0.03484848484848485,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,80.0,16,0.01909090909090909,1.0,39.78625
+decoder_tau,mit-bih,10 dB,controlled,qrs_f1,160.0,16,0.0,1.0,39.78625
+epochs,synthetic-ecg,clean,controlled,snr_affine_db,0.0,10,1.7623957932860799,1.0,40.53125
+epochs,synthetic-ecg,clean,controlled,snr_affine_db,10.0,10,1.1943235330381297,1.0,40.862500000000004
+epochs,synthetic-ecg,clean,controlled,snr_affine_db,50.0,10,1.005197707640038,1.0,39.51875
+epochs,synthetic-ecg,clean,controlled,snr_affine_db,200.0,10,1.0265575294509504,1.0,39.987500000000004
+epochs,synthetic-ecg,clean,shipped,snr_affine_db,0.0,10,1.1934077851607434,1.0,58.35625
+epochs,synthetic-ecg,clean,shipped,snr_affine_db,10.0,10,2.024151461593511,1.0,0.86875
+epochs,synthetic-ecg,clean,shipped,snr_affine_db,50.0,10,1.7722546609511616,1.0,2.3
+epochs,synthetic-ecg,clean,shipped,snr_affine_db,200.0,10,1.1704203813135252,1.0,3.95625
+epochs,synthetic-ecg,10 dB,controlled,snr_affine_db,0.0,10,1.3590793080216192,1.0,40.55625
+epochs,synthetic-ecg,10 dB,controlled,snr_affine_db,10.0,10,0.9400659218418399,1.0,41.15625
+epochs,synthetic-ecg,10 dB,controlled,snr_affine_db,50.0,10,0.7121138320123226,1.0,41.1125
+epochs,synthetic-ecg,10 dB,controlled,snr_affine_db,200.0,10,0.7101192523105297,1.0,40.66875
+epochs,synthetic-ecg,10 dB,shipped,snr_affine_db,0.0,10,0.8532442354800589,1.0,64.51875
+epochs,synthetic-ecg,10 dB,shipped,snr_affine_db,10.0,10,1.7488335990708386,1.0,0.8687499999999999
+epochs,synthetic-ecg,10 dB,shipped,snr_affine_db,50.0,10,0.9692724091268226,1.0,4.575
+epochs,synthetic-ecg,10 dB,shipped,snr_affine_db,200.0,10,0.8453462304394255,1.0,5.39375
+epochs,mit-bih,clean,controlled,snr_affine_db,0.0,16,1.9186280241744278,1.0,40.17375
+epochs,mit-bih,clean,controlled,snr_affine_db,10.0,16,1.3358184131749335,1.0,39.72625000000001
+epochs,mit-bih,clean,controlled,snr_affine_db,50.0,16,1.126838008553785,1.0,39.949375
+epochs,mit-bih,clean,controlled,snr_affine_db,200.0,16,1.0596793863037162,1.0,40.041250000000005
+epochs,mit-bih,clean,controlled,qrs_f1,0.0,16,0.057692307692307696,1.0,40.17375
+epochs,mit-bih,clean,controlled,qrs_f1,10.0,16,0.02111111111111111,1.0,39.72625000000001
+epochs,mit-bih,clean,controlled,qrs_f1,50.0,16,0.036515151515151514,1.0,39.949375
+epochs,mit-bih,clean,controlled,qrs_f1,200.0,16,0.03736263736263736,1.0,40.041250000000005
+epochs,mit-bih,clean,shipped,snr_affine_db,0.0,16,1.6469444347142048,1.0,64.77499999999998
+epochs,mit-bih,clean,shipped,snr_affine_db,10.0,16,1.2498101809777589,0.99375,1.134375
+epochs,mit-bih,clean,shipped,snr_affine_db,50.0,16,1.1577198273058702,1.0,4.2524999999999995
+epochs,mit-bih,clean,shipped,snr_affine_db,200.0,16,0.9344770728236733,1.0,5.0225
+epochs,mit-bih,clean,shipped,qrs_f1,0.0,16,0.07315018315018315,1.0,64.77499999999998
+epochs,mit-bih,clean,shipped,qrs_f1,10.0,16,0.6901510181425042,0.99375,1.134375
+epochs,mit-bih,clean,shipped,qrs_f1,50.0,16,0.5893908650041373,1.0,4.2524999999999995
+epochs,mit-bih,clean,shipped,qrs_f1,200.0,16,0.5535531285393986,1.0,5.0225
+epochs,mit-bih,10 dB,controlled,snr_affine_db,0.0,16,1.4742765269231648,1.0,39.78625
+epochs,mit-bih,10 dB,controlled,snr_affine_db,10.0,16,0.8770699138028389,1.0,39.9475
+epochs,mit-bih,10 dB,controlled,snr_affine_db,50.0,16,0.7537713353206867,1.0,39.8725
+epochs,mit-bih,10 dB,controlled,snr_affine_db,200.0,16,0.7185318544889687,1.0,40.22625
+epochs,mit-bih,10 dB,controlled,qrs_f1,0.0,16,0.044478021978021975,1.0,39.78625
+epochs,mit-bih,10 dB,controlled,qrs_f1,10.0,16,0.01666666666666667,1.0,39.9475
+epochs,mit-bih,10 dB,controlled,qrs_f1,50.0,16,0.01909090909090909,1.0,39.8725
+epochs,mit-bih,10 dB,controlled,qrs_f1,200.0,16,0.014583333333333335,1.0,40.22625
+epochs,mit-bih,10 dB,shipped,snr_affine_db,0.0,16,1.0980987431466924,1.0,69.37062499999999
+epochs,mit-bih,10 dB,shipped,snr_affine_db,10.0,16,1.1643798435316053,0.975,1.0854166666666667
+epochs,mit-bih,10 dB,shipped,snr_affine_db,50.0,16,0.9915636902828833,1.0,4.469374999999999
+epochs,mit-bih,10 dB,shipped,snr_affine_db,200.0,16,0.7536036359823426,1.0,4.9624999999999995
+epochs,mit-bih,10 dB,shipped,qrs_f1,0.0,16,0.05208333333333333,1.0,69.37062499999999
+epochs,mit-bih,10 dB,shipped,qrs_f1,10.0,16,0.6754517508635156,0.975,1.0854166666666667
+epochs,mit-bih,10 dB,shipped,qrs_f1,50.0,16,0.5182941905115818,1.0,4.469374999999999
+epochs,mit-bih,10 dB,shipped,qrs_f1,200.0,16,0.5141246618031514,1.0,4.9624999999999995
+depth,synthetic-ecg,clean,controlled,snr_affine_db,2.0,10,2.8681648891782516,1.0,40.0625
+depth,synthetic-ecg,clean,controlled,snr_affine_db,3.0,10,1.7623957932860799,1.0,40.53125
+depth,synthetic-ecg,clean,controlled,snr_affine_db,4.0,10,1.3374863612040242,1.0,40.4
+depth,synthetic-ecg,10 dB,controlled,snr_affine_db,2.0,10,2.2914398665831017,1.0,40.28125
+depth,synthetic-ecg,10 dB,controlled,snr_affine_db,3.0,10,1.3590793080216192,1.0,40.55625
+depth,synthetic-ecg,10 dB,controlled,snr_affine_db,4.0,10,1.0306598154985522,1.0,40.55
+depth,mit-bih,clean,controlled,snr_affine_db,2.0,16,2.7499008392905147,1.0,40.08624999999999
+depth,mit-bih,clean,controlled,snr_affine_db,3.0,16,1.9186280241744278,1.0,40.17375
+depth,mit-bih,clean,controlled,snr_affine_db,4.0,16,1.5729355408272234,1.0,40.248125
+depth,mit-bih,clean,controlled,qrs_f1,2.0,16,0.23585667600373483,1.0,40.08624999999999
+depth,mit-bih,clean,controlled,qrs_f1,3.0,16,0.057692307692307696,1.0,40.17375
+depth,mit-bih,clean,controlled,qrs_f1,4.0,16,0.051666666666666666,1.0,40.248125
+depth,mit-bih,10 dB,controlled,snr_affine_db,2.0,16,2.3161994044982004,1.0,39.96062499999999
+depth,mit-bih,10 dB,controlled,snr_affine_db,3.0,16,1.4742765269231648,1.0,39.78625
+depth,mit-bih,10 dB,controlled,snr_affine_db,4.0,16,1.14220939444097,1.0,39.644999999999996
+depth,mit-bih,10 dB,controlled,qrs_f1,2.0,16,0.1524242424242424,1.0,39.96062499999999
+depth,mit-bih,10 dB,controlled,qrs_f1,3.0,16,0.044478021978021975,1.0,39.78625
+depth,mit-bih,10 dB,controlled,qrs_f1,4.0,16,0.007692307692307693,1.0,39.644999999999996
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,5.0,10,1.551606049039008,1.0,39.89999999999999
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,10.0,10,1.2867626013512115,1.0,40.00625
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,20.0,10,1.1943235330381297,1.0,40.862500000000004
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,40.0,10,1.153727341912696,1.0,40.493750000000006
+stdp_tau,synthetic-ecg,clean,controlled,snr_affine_db,80.0,10,1.513013248328919,1.0,40.48125
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,5.0,10,1.125557859328036,1.0,39.94375
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,10.0,10,0.9735870734559897,1.0,40.76875
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,20.0,10,0.9400659218418399,1.0,41.15625
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,40.0,10,0.9188800243841035,1.0,39.34375
+stdp_tau,synthetic-ecg,10 dB,controlled,snr_affine_db,80.0,10,1.1207543956812787,1.0,39.862500000000004
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,5.0,16,1.6219056051234642,1.0,39.76625000000001
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,10.0,16,1.4242849294422186,1.0,39.593125
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,20.0,16,1.3358184131749335,1.0,39.72625000000001
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,40.0,16,1.3477111442664516,1.0,39.738125000000004
+stdp_tau,mit-bih,clean,controlled,snr_affine_db,80.0,16,1.521112167167646,1.0,39.77375
+stdp_tau,mit-bih,clean,controlled,qrs_f1,5.0,16,0.07762626262626263,1.0,39.76625000000001
+stdp_tau,mit-bih,clean,controlled,qrs_f1,10.0,16,0.040717517776341305,1.0,39.593125
+stdp_tau,mit-bih,clean,controlled,qrs_f1,20.0,16,0.02111111111111111,1.0,39.72625000000001
+stdp_tau,mit-bih,clean,controlled,qrs_f1,40.0,16,0.03392607392607393,1.0,39.738125000000004
+stdp_tau,mit-bih,clean,controlled,qrs_f1,80.0,16,0.03901515151515152,1.0,39.77375
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,5.0,16,1.1787018796370874,1.0,39.810625
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,10.0,16,0.9961344710739145,1.0,39.551874999999995
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,20.0,16,0.8770699138028389,1.0,39.9475
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,40.0,16,0.9491728903571026,1.0,40.0175
+stdp_tau,mit-bih,10 dB,controlled,snr_affine_db,80.0,16,1.1884226173965842,1.0,39.651250000000005
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,5.0,16,0.024567099567099567,1.0,39.810625
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,10.0,16,0.014835164835164835,1.0,39.551874999999995
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,20.0,16,0.01666666666666667,1.0,39.9475
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,40.0,16,0.017424242424242425,1.0,40.0175
+stdp_tau,mit-bih,10 dB,controlled,qrs_f1,80.0,16,0.01818181818181818,1.0,39.651250000000005
