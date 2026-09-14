@@ -38,7 +38,9 @@ bits.
 carries a degeneracy verdict, and every stage (encoder and each LIF layer) is
 scored so that cascade-law quantities can be computed downstream. The decoder
 time constant is a readout choice made after the spikes exist, so one network
-run is scored at every requested `decoder_tau` rather than re-simulated.
+run is scored at every requested `decoder_tau` rather than re-simulated. R5
+generalises this: a run is scored with every readout in `Spec.readouts`, and
+the encoder can be temporal or delta instead of Poisson (`ENCODERS`).
 
 Results are appended row by row and a grid resumes from whatever its CSV
 already holds, so an interrupted sweep loses at most the runs in flight.
@@ -53,20 +55,24 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from neuroflux_core import (
+    DeltaEncoder,
     LIFConfig,
     Network,
     PoissonRateEncoder,
     STDPConfig,
+    TemporalEncoder,
+    calibrate_delta_threshold,
     calibrate_encoder_rate,
     calibrate_gain,
 )
+from neuroflux_core.encoders.base import BaseEncoder
 from neuroflux_core.metrics.degeneracy import is_degenerate
 from neuroflux_core.metrics.qrs import qrs_score
-from neuroflux_core.metrics.reconstruction import affine_corrected_snr
+from neuroflux_core.metrics.reconstruction import affine_corrected_snr, affine_fit
 from neuroflux_core.metrics.snr import calculate_snr
 from neuroflux_core.network.feedforward import FeedForwardNetwork
 from neuroflux_datasets.signals import DEFAULT_CACHE_DIR, load_reference_beats
@@ -113,8 +119,34 @@ OPERATING_POINTS: tuple[str, ...] = ("shipped", "controlled")
 
 
 _LATE_FIELDS: frozenset[str] = frozenset(
-    {"calibrate_at_snr_db", "encoder_range", "fan_in"}
+    {"calibrate_at_snr_db", "encoder_range", "fan_in", "encoder", "readouts"}
 )
+
+# Encoders (R5). Every R3 and R4b grid used Poisson, the default.
+#   poisson   rate code; calibrated to its target mean rate by its ceiling;
+#   temporal  time-to-first-spike: one spike per channel per window, earlier
+#             for larger values. The window is the rate: 24 ms (6 steps,
+#             41.7 Hz, six latency levels) for a 40 Hz target;
+#   delta     `DeltaEncoder` in absolute mode, its threshold calibrated to the
+#             target rate on the calibration drive. Its rate follows
+#             `|dx/dt|`, so a rate readout sees the slope, not the signal.
+# Temporal and delta encoders are deterministic, and a tiled drive gives every
+# input channel the same spikes.
+ENCODERS: tuple[str, ...] = ("poisson", "temporal", "delta")
+
+# Readouts (R5), each a (kind, parameter) pair applied to every stage.
+#   population  `PopulationDecoder`, parameter its time constant in ms;
+#   spike-rate  `SpikeRateDecoder`, parameter its trailing window in ms;
+#   latency     temporal encoder only, parameter ignored. See `latency_readout`.
+READOUT_KINDS: tuple[str, ...] = ("population", "spike-rate", "latency")
+# A deterministic encoder has no ceiling parameter; its stage is read against
+# the most a channel can fire, once per step.
+STEP_RATE_HZ = 1000.0 / DT
+# Lags searched for `snr_best_lag_db`, which separates a readout's delay from
+# its noise. The longest causal readout in R5 trails by about 40 ms; a longer
+# search starts matching narrowband signals a whole cycle late (EEG alpha has a
+# 100 ms period), which is why the bound is short and positive scales only.
+MAX_LAG_MS = 64.0
 
 # How the encoder's [v_min, v_max] is chosen (R4b, roadmap next action 14).
 #   None        the drive's own minimum and maximum — every R3 grid;
@@ -161,6 +193,11 @@ class Spec:
     # R4b: exact number of non-zero inputs per first-layer neuron (M4's scheme);
     # None keeps the dense initialisation.
     fan_in: int | None = None
+    # R5: see ENCODERS; None is Poisson.
+    encoder: str | None = None
+    # R5: see READOUT_KINDS. When set, replaces `decoder_taus`; None reads the
+    # output with a population decoder at each of `decoder_taus`.
+    readouts: tuple[tuple[str, float], ...] | None = None
 
     def key(self) -> str:
         """
@@ -179,6 +216,13 @@ class Spec:
     def init_scheme(self) -> Literal["uniform", "scaled"]:
         """Shipped networks start uniform, as `cli.py` builds them."""
         return "uniform" if self.operating_point == "shipped" else "scaled"
+
+    @property
+    def readout_list(self) -> tuple[tuple[str, float], ...]:
+        """Every (kind, parameter) this run is scored with, in row order."""
+        if self.readouts is not None:
+            return self.readouts
+        return tuple(("population", tau) for tau in self.decoder_taus)
 
 
 @dataclass(frozen=True)
@@ -203,16 +247,23 @@ class Row:
     calibrate_at_snr_db: float
     encoder_range: str
     fan_in: int
+    encoder: str
+    decoder: str
     g_syn: float
     encoder_max_hz: float
+    delta_threshold: float
     layer_rate_targets_hz: str
     layer_gains: str
     snr_raw_db: float
     snr_affine_db: float
+    affine_scale: float
+    snr_best_lag_db: float
+    best_lag_ms: float
     verdict: str
     degenerate: bool
     out_std_rel: float
     stage_affine_db: str
+    latency_delays: str
     encoder_rate_hz: float
     layer_rates_hz: str
     out_rate_hz: float
@@ -287,6 +338,115 @@ def readout(
     return np.asarray((v_min + clipped * (v_max - v_min)).mean(axis=1))
 
 
+def spike_rate_readout(
+    spikes: np.ndarray,
+    v_min: float,
+    v_max: float,
+    window_ms: float,
+    max_rate_hz: float,
+) -> np.ndarray:
+    """
+    `SpikeRateDecoder.decode` applied to a whole spike raster at once.
+
+    The decoder keeps the trailing `floor(window_ms / dt)` steps (at least
+    one), divides the population's count by the time they span and clips the
+    population mean rate, not each neuron's, at `max_rate_hz`.
+    """
+    steps = max(1, int(math.floor(window_ms / DT + 1e-9)))
+    n_steps, n_neurons = spikes.shape
+    cumulative = np.concatenate([[0.0], np.cumsum(spikes.sum(axis=1, dtype=float))])
+    end = np.arange(1, n_steps + 1)
+    start = np.maximum(0, end - steps)
+    counts = cumulative[end] - cumulative[start]
+    elapsed_ms = (end - start) * DT
+    rate = counts / elapsed_ms * 1000.0 / max(n_neurons, 1)
+    normalized = np.minimum(rate / max_rate_hz, 1.0)
+    return np.asarray(v_min + normalized * (v_max - v_min))
+
+
+def temporal_window_steps(rate_hz: float) -> int:
+    """Steps per temporal-encoder window for a target rate: one spike per window."""
+    return max(2, round(1000.0 / (rate_hz * DT)))
+
+
+def latency_readout(
+    spikes: np.ndarray, encoder_spikes: np.ndarray, window_steps: int
+) -> tuple[np.ndarray, int]:
+    """
+    A time-to-first-spike code read back out of any stage, causally.
+
+    The encoder samples the drive at the start of each window and every
+    channel fires once inside it, earlier for larger values. A later stage
+    answers each volley after a delay, so its windows are shifted by that
+    delay: the lag in `[0, window_steps)` at which the stage's pooled spike
+    count correlates best with the encoder's. The delay is found from spikes
+    alone — the clean signal is never consulted.
+
+    Each shifted window is read as the population's mean first-spike step,
+    with a neuron that stays silent counted at `window_steps`, negated so that
+    earlier means larger. That value is known only once its window has closed,
+    so it is held from then until the next window closes.
+
+    Returns:
+        The readout, one value per step, and the delay in steps.
+    """
+    n_steps = spikes.shape[0]
+    pooled_encoder = encoder_spikes.sum(axis=1, dtype=float)
+    pooled = spikes.sum(axis=1, dtype=float)
+    correlation = [
+        float(np.dot(pooled_encoder[: n_steps - lag], pooled[lag:]))
+        for lag in range(window_steps)
+    ]
+    delay = int(np.argmax(correlation))
+    n_windows = (n_steps - delay) // window_steps
+    values = np.empty(max(n_windows, 1))
+    values[0] = 0.0
+    for k in range(n_windows):
+        block = spikes[delay + k * window_steps : delay + (k + 1) * window_steps]
+        fired = block.any(axis=0)
+        first = np.where(fired, block.argmax(axis=0), window_steps)
+        values[k] = -float(first.mean())
+    out = np.full(n_steps, values[0])
+    for k in range(n_windows):
+        start = delay + (k + 1) * window_steps
+        out[start : start + window_steps] = values[k]
+    if n_windows:
+        tail = delay + (n_windows + 1) * window_steps
+        out[tail:] = values[n_windows - 1]
+    return out, delay
+
+
+def best_lag_snr(clean: np.ndarray, output: np.ndarray) -> tuple[float, float]:
+    """
+    Affine-corrected SNR with the output advanced by its best lag, and the lag.
+
+    Every causal readout trails the signal, and at high SNR a few tens of
+    milliseconds cost as much as the noise does; this separates the two. Lags
+    run from 0 to `MAX_LAG_MS`, every lag is scored on the same samples (the
+    first `T - MAX_LAG_MS` of the clean signal), and only fits with a positive
+    scale count, so an inverted or half-cycle-late match cannot win. Taking the
+    best of 17 neighbouring lags is slightly optimistic; the same search is
+    applied to every readout.
+    """
+    max_lag = int(MAX_LAG_MS / DT)
+    n = clean.shape[0] - max_lag
+    reference = clean[:n]
+    best, best_lag = -math.inf, 0
+    for lag in range(max_lag + 1):
+        segment = output[lag : lag + n]
+        if is_degenerate(segment):
+            continue
+        scale, _ = affine_fit(reference, segment)
+        if scale <= 0.0:
+            continue
+        value = affine_corrected_snr(reference, segment)
+        if value > best:
+            best, best_lag = value, lag
+    if math.isinf(best):
+        return math.nan, math.nan
+    return best, best_lag * DT
+
+
 def encoder_bounds(
     drive: np.ndarray, clean: np.ndarray, method: str | None
 ) -> tuple[float, float]:
@@ -330,37 +490,67 @@ def fixed_fan_in_weights(
 
 
 def _calibration_spikes(
-    drive: np.ndarray,
+    encoder: BaseEncoder, drive: np.ndarray, seconds: float
+) -> np.ndarray:
+    steps = min(drive.shape[0], int(seconds * FS))
+    return np.stack([encoder.encode(drive[t], DT) for t in range(steps)], axis=0)
+
+
+def _make_encoder(
+    name: str,
     v_min: float,
     v_max: float,
     encoder_max_hz: float,
+    threshold: float,
+    window_steps: int,
     rng: np.random.Generator,
-    seconds: float,
-) -> np.ndarray:
-    encoder = PoissonRateEncoder(
-        v_min=v_min, v_max=v_max, max_firing_rate_hz=encoder_max_hz, rng=rng
-    )
-    steps = min(drive.shape[0], int(seconds * FS))
-    return np.stack([encoder.encode(drive[t], DT) for t in range(steps)], axis=0)
+) -> BaseEncoder:
+    if name == "poisson":
+        return PoissonRateEncoder(
+            v_min=v_min, v_max=v_max, max_firing_rate_hz=encoder_max_hz, rng=rng
+        )
+    if name == "temporal":
+        return TemporalEncoder(v_min, v_max, t_window_ms=window_steps * DT)
+    return DeltaEncoder(threshold, mode="absolute")
+
+
+# (clean, noisy, reference beats or None, {(kind, parameter): output signal})
+OutputHook = Callable[
+    [np.ndarray, np.ndarray, "np.ndarray | None", dict[tuple[str, float], np.ndarray]],
+    None,
+]
 
 
 def run_spec(
     spec: Spec,
     cache_dir: str = DEFAULT_CACHE_DIR,
     network_hook: Callable[[FeedForwardNetwork], None] | None = None,
+    output_hook: OutputHook | None = None,
 ) -> list[Row]:
     """
-    Build, calibrate, train, run and score one spec at every decoder tau.
+    Build, calibrate, train, run and score one spec with every readout.
 
     `network_hook`, if given, is called with the network after the evaluation
     run, for diagnostics that need its weights. It must not modify the network;
-    the rows are computed from spikes already captured.
+    the rows are computed from spikes already captured. `output_hook`, if
+    given, receives every readout's output signal, for scoring the rows do not
+    carry.
     """
     started = time.perf_counter()
     if spec.operating_point not in OPERATING_POINTS:
         raise ValueError(f"Unknown operating point {spec.operating_point!r}.")
     controlled = spec.operating_point == "controlled"
     n_groups = len(spec.layers) - 1
+    encoder_name = spec.encoder or "poisson"
+    if encoder_name not in ENCODERS:
+        raise ValueError(f"Unknown encoder {encoder_name!r}; expected {ENCODERS}.")
+    if encoder_name != "poisson" and not controlled:
+        raise ValueError("Temporal and delta encoders need the controlled point.")
+    for kind, _ in spec.readout_list:
+        if kind not in READOUT_KINDS:
+            raise ValueError(f"Unknown readout {kind!r}; expected {READOUT_KINDS}.")
+        if kind == "latency" and encoder_name != "temporal":
+            raise ValueError("The latency readout needs the temporal encoder.")
 
     noise_rng, encoder_rng, calib_rng = _streams(spec.seed)
     clean, beats = load_signal(
@@ -407,13 +597,21 @@ def run_spec(
         raise ValueError(
             f"{len(targets)} layer rate targets for {n_groups} neuron groups."
         )
-    encoder_max_hz = (
-        calibrate_encoder_rate(
-            calibration_drive, v_min, v_max, DT, target_rate_hz=spec.encoder_rate_hz
+    encoder_max_hz = math.nan
+    threshold = math.nan
+    window_steps = temporal_window_steps(spec.encoder_rate_hz)
+    if encoder_name == "poisson":
+        encoder_max_hz = (
+            calibrate_encoder_rate(
+                calibration_drive, v_min, v_max, DT, target_rate_hz=spec.encoder_rate_hz
+            )
+            if controlled
+            else MAX_RATE_HZ
         )
-        if controlled
-        else MAX_RATE_HZ
-    )
+    elif encoder_name == "delta":
+        threshold = calibrate_delta_threshold(
+            calibration_drive[:, 0], DT, target_rate_hz=spec.encoder_rate_hz
+        )
 
     net = Network.feedforward(
         layers=list(spec.layers),
@@ -433,18 +631,28 @@ def run_spec(
         first.weights = weights.copy()
         # `reset_state` restores from this copy, so it must carry the new matrix.
         first.initial_weights_copy = weights.copy()
-    encoder = PoissonRateEncoder(
-        v_min=v_min, v_max=v_max, max_firing_rate_hz=encoder_max_hz, rng=encoder_rng
-    )
+
+    def new_encoder(rng: np.random.Generator) -> BaseEncoder:
+        return _make_encoder(
+            encoder_name, v_min, v_max, encoder_max_hz, threshold, window_steps, rng
+        )
+
+    encoder = new_encoder(encoder_rng)
+    if isinstance(encoder, PoissonRateEncoder):
+        poisson = encoder
+        stream_state = poisson.rng.bit_generator.state
+
+        def rewind() -> None:
+            poisson.rng.bit_generator.state = stream_state
+
+    else:
+        rewind = encoder.reset_state
 
     if controlled:
         sparse = min(targets) < SPARSE_CALIBRATION_HZ
         calib_spikes = _calibration_spikes(
+            new_encoder(calib_rng),
             calibration_drive,
-            v_min,
-            v_max,
-            encoder_max_hz,
-            calib_rng,
             spec.duration_s if sparse else CALIBRATION_S,
         )
         tol_hz = min(0.5, 0.05 * min(targets))
@@ -465,16 +673,16 @@ def run_spec(
     if spec.epochs:
         # Train on the encoder stream the evaluation will also see, then rewind
         # it, so epochs = 0 and epochs = N are scored on identical spikes.
-        stream_state = encoder.rng.bit_generator.state
         for _ in range(spec.epochs):
             net.reset_transient_state()
             for t in range(n_steps):
                 net.step(encoder.encode(drive[t], DT), DT, training=True)
-            encoder.rng.bit_generator.state = stream_state
+            rewind()
         if controlled:
             calibrate()
 
     net.reset_transient_state()
+    rewind()
     widths = list(spec.layers)
     rasters = [np.zeros((n_steps, w), dtype=bool) for w in widths]
     for t in range(n_steps):
@@ -502,19 +710,26 @@ def run_spec(
         qrs_input = qrs_score(beats, noisy, FS).f1
 
     clean_std = float(np.std(clean))
+    encoder_stage_hz = encoder_max_hz if encoder_name == "poisson" else STEP_RATE_HZ
     rows: list[Row] = []
-    for tau in spec.decoder_taus:
-        stages = [
-            readout(
-                raster,
-                v_min,
-                v_max,
-                tau,
-                encoder_max_hz if idx == 0 else MAX_RATE_HZ,
-            )
-            for idx, raster in enumerate(rasters)
-        ]
+    outputs: dict[tuple[str, float], np.ndarray] = {}
+    for kind, parameter in spec.readout_list:
+        delays: list[int] = []
+        stages = []
+        for idx, raster in enumerate(rasters):
+            stage_hz = encoder_stage_hz if idx == 0 else MAX_RATE_HZ
+            if kind == "population":
+                stages.append(readout(raster, v_min, v_max, parameter, stage_hz))
+            elif kind == "spike-rate":
+                stages.append(
+                    spike_rate_readout(raster, v_min, v_max, parameter, stage_hz)
+                )
+            else:
+                signal, delay = latency_readout(raster, rasters[0], window_steps)
+                stages.append(signal)
+                delays.append(delay)
         output = stages[-1]
+        outputs[(kind, parameter)] = output
         degenerate = is_degenerate(output)
         if saturated_frac >= SATURATED_POPULATION_FRACTION:
             verdict = "saturated"
@@ -526,6 +741,9 @@ def run_spec(
             math.nan if is_degenerate(s) else affine_corrected_snr(clean, s)
             for s in stages
         ]
+        best_db, best_lag_ms = (
+            (math.nan, math.nan) if degenerate else best_lag_snr(clean, output)
+        )
         f1 = se = ppv = jitter = math.nan
         if beats is not None:
             score = qrs_score(beats, output, FS)
@@ -548,7 +766,7 @@ def run_spec(
                 init_scheme=spec.init_scheme,
                 epochs=spec.epochs,
                 stdp_tau=spec.stdp_tau,
-                decoder_tau=tau,
+                decoder_tau=math.nan if kind == "latency" else parameter,
                 input_snr_nominal=spec.input_snr_db,
                 input_snr_db=input_db,
                 input_affine_db=input_affine,
@@ -559,16 +777,23 @@ def run_spec(
                 ),
                 encoder_range=spec.encoder_range or "minmax",
                 fan_in=0 if spec.fan_in is None else spec.fan_in,
+                encoder=encoder_name,
+                decoder=kind,
                 g_syn=math.nan if controlled else spec.g_syn,
                 encoder_max_hz=encoder_max_hz,
+                delta_threshold=threshold,
                 layer_rate_targets_hz=_join(targets) if controlled else "",
                 layer_gains=_join(net.layer_gains),
                 snr_raw_db=math.nan if degenerate else calculate_snr(clean, output),
                 snr_affine_db=stage_db[-1],
+                affine_scale=(math.nan if degenerate else affine_fit(clean, output)[0]),
+                snr_best_lag_db=best_db,
+                best_lag_ms=best_lag_ms,
                 verdict=verdict,
                 degenerate=degenerate,
                 out_std_rel=float(np.std(output)) / clean_std if clean_std else 0.0,
                 stage_affine_db=_join(stage_db),
+                latency_delays=";".join(str(d) for d in delays),
                 encoder_rate_hz=rates[0],
                 layer_rates_hz=_join(rates[1:]),
                 out_rate_hz=rates[-1],
@@ -583,6 +808,8 @@ def run_spec(
                 wall_s=time.perf_counter() - started,
             )
         )
+    if output_hook is not None:
+        output_hook(clean, noisy, beats, outputs)
     return rows
 
 
@@ -605,9 +832,15 @@ def run_grid(
     out: Path,
     workers: int | None = None,
     cache_dir: str = DEFAULT_CACHE_DIR,
+    task: Callable[[Spec, str], Sequence[Any]] = run_spec,
+    row_type: type = Row,
 ) -> None:
     """
     Run every spec not already in `out`, appending rows as runs finish.
+
+    `task` maps a spec and the cache directory to its rows, which must be
+    dataclasses of `row_type` carrying a `spec_key` field; it must be a
+    module-level function so the process pool can pickle it.
 
     Raises `SystemExit` after the pool drains if any run failed, having kept
     every row that succeeded — the loud-failure contract `cli.py` follows.
@@ -626,7 +859,7 @@ def run_grid(
 
     out.parent.mkdir(parents=True, exist_ok=True)
     new_file = not out.exists()
-    header = [f.name for f in fields(Row)]
+    header = [f.name for f in fields(row_type)]
     if not new_file:
         with out.open(newline="", encoding="utf-8") as handle:
             existing = next(csv.reader(handle), [])
@@ -644,7 +877,7 @@ def run_grid(
         writer = csv.DictWriter(handle, fieldnames=header)
         if new_file:
             writer.writeheader()
-        futures = {pool.submit(run_spec, spec, cache_dir): spec for spec in todo}
+        futures = {pool.submit(task, spec, cache_dir): spec for spec in todo}
         for count, future in enumerate(as_completed(futures), start=1):
             spec = futures[future]
             try:
