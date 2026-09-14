@@ -448,11 +448,11 @@ def table_1() -> None:
         ("mit-bih", "10 dB", "qrs_f1", "QRS $F_1$, 10 dB in"),
     )
     knob_names = {
-        "output_width": "Output width $N$ (ref.\\ 8)",
-        "decoder_tau": "Decoder $\\tau$, ms (ref.\\ 20)",
-        "epochs": "STDP epochs (ref.\\ 0)",
-        "depth": "Layers (ref.\\ 3)",
-        "stdp_tau": "STDP $\\tau$, ms (ref.\\ 20; 10 epochs)",
+        "output_width": "Output width $N$",
+        "decoder_tau": "Decoder $\\tau$ (ms)",
+        "epochs": "STDP epochs",
+        "depth": "Layers",
+        "stdp_tau": "STDP $\\tau$ (ms)",
     }
 
     def cell(knob: str, op: str, level: str, column: tuple[str, str, str, str]) -> str:
@@ -470,7 +470,7 @@ def table_1() -> None:
         if not match:
             return ""
         r = match[0]
-        digits = 2 if metric == "snr_affine_db" else 3
+        digits = 2
         return (
             f"${fnum(r['median_diff']):+.{digits}f}$ "
             f"[${fnum(r['ci_low']):+.{digits}f}$, ${fnum(r['ci_high']):+.{digits}f}$] "
@@ -483,14 +483,17 @@ def table_1() -> None:
         "\\centering",
         "\\caption{Ceiling invariances under per-layer and encoder rate control. "
         "Median paired change from the reference level [95\\% BCa CI]; units are "
-        "records (MIT-BIH, $n=16$) or seeds (synthetic, $n=10$). "
+        "records (MIT-BIH, $n=16$) or seeds (synthetic, $n=10$). References: "
+        "$N=8$, $\\tau=20$~ms, 0 epochs, 3 layers, STDP $\\tau=20$~ms (trained "
+        "10 epochs). Shipped rows let firing rates move with training. "
         "$\\equiv$: equivalent by TOST ($\\pm0.5$~dB; $\\pm0.05$ for $F_1$), "
         "possibly also significantly non-zero. "
         "$\\uparrow\\downarrow$: significant (Wilcoxon, Holm within knob) and not "
         "shown equivalent. --: neither.}",
         "\\label{tab:invariances}",
         "\\footnotesize",
-        "\\begin{tabular}{ll" + "l" * len(columns) + "}",
+        "\\setlength{\\tabcolsep}{4pt}",
+        "\\begin{tabular}{lr" + "l" * len(columns) + "}",
         "\\toprule",
         "Knob & Level & " + " & ".join(c[3] for c in columns) + " \\\\",
         "\\midrule",
@@ -507,7 +510,7 @@ def table_1() -> None:
             )
             if not levels:
                 continue
-            label = name if op == "controlled" else "STDP epochs, shipped (rates free)"
+            label = name if op == "controlled" else "STDP epochs, shipped"
             for i, level in enumerate(levels):
                 cells = [cell(knob, op, level, c) for c in columns]
                 lines.append(

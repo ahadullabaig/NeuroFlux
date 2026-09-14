@@ -352,8 +352,10 @@ run is `ok`; 5 of 6,120 runs are silent, all shipped MIT-BIH networks after 10 e
 10 dB input, 1 noiseless).
 
 **Table I** (`results/r3_characterisation/figures/table1_invariances.tex`) and **Fig. 2**
-carry the full comparison. The table's LaTeX is generated but has not been compiled here —
-no TeX toolchain is installed on this machine.
+carry the full comparison. The table and Figs. 1–3 compile with pdfTeX (TeX Live 2026) in a
+two-column stand-in with IEEE journal geometry (43 pc text block, 1 pc column gap, 10 pt Times),
+with no overfull boxes; `IEEEtran.cls` itself is not installed here, so its caption and heading
+styles are unchecked.
 
 ### 2.1 Verdicts, as pre-registered
 
