@@ -108,7 +108,8 @@ def fnum(value: str) -> float:
 
 def save(fig: Figure, stem: str) -> None:
     FIGURES.mkdir(parents=True, exist_ok=True)
-    fig.savefig(FIGURES / f"{stem}.pdf")
+    # No creation date, so re-rendering unchanged data leaves the PDF byte-identical.
+    fig.savefig(FIGURES / f"{stem}.pdf", metadata={"CreationDate": None})
     fig.savefig(FIGURES / f"{stem}.png", dpi=300)
     plt.close(fig)
     print(f"  wrote {FIGURES / stem}.pdf (+ .png preview)")
