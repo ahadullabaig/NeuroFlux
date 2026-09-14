@@ -14,6 +14,21 @@ uv run neuroflux-experiment compare results/phase3_full_sweep.db epochs 10 50 \
 
 ---
 
+> **Correction (R3, `docs/r3_findings.md` §1.6) — input-SNR labels, and what "doing nothing"
+> means.** **(1)** Every MIT-BIH input SNR in §3 and §5 is *nominal*. `make_pair` adds the 50 Hz
+> flicker at 0.5 amplitude first and scales the Gaussian noise to the power of the flickered
+> signal, so on unit-variance ECG the flicker alone holds the input below +9 dB. Measured against
+> the clean signal (16 records × 3 seeds), nominal −5 / 0 / 5 / 10 / 20 dB are actually
+> **−5.6 / −0.9 / +3.2 / +6.3 / +8.7 dB**. No direction reported here changes; the
+> positions on the SNR axis do. **(2)** The "unprocessed" or "doing nothing" QRS baseline runs
+> neurokit's peak detector on the raw input, which never removes the flicker. After neurokit's
+> own standard `ecg_clean` (0.5 Hz high-pass plus powerline filter) the same detector scores
+> **median F1 0.92 at nominal −5 dB and 1.00 at every other level**; the best median of any
+> NeuroFlux configuration in R2's sweep is 0.71 (10 epochs, nominal 20 dB), though single records
+> reach 0.98. Network-versus-identity QRS results are comparisons against an unfiltered detector,
+> not against conventional ECG preprocessing.
+
+
 ## 1. The defect, and its size
 
 `fetch_raw_runs` selected 8 of the 11 data columns. The three it dropped — `dataset`,
@@ -223,6 +238,10 @@ has few maxima, misses some beats outright, and is penalised — even though its
 real ones.
 
 ### 5.3 Against doing nothing
+
+> **Read with the correction at the top.** "Doing nothing" here is an unfiltered detector; with
+> neurokit's standard cleaning it scores median F1 0.92–1.00 at every level, against a best
+> network median of 0.71.
 
 `scripts/r2_reanalysis/identity_baseline.py` scores the unprocessed input on the same windows
 and noise draws, so each network can be paired against no processing. Full table in
