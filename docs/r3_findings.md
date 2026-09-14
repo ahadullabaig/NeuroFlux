@@ -31,6 +31,17 @@ Grids resume from whatever their CSV already holds. The raw grids are committed 
 analysis reads the gzipped copies directly and reproduces every table in `analysis/` byte for
 byte; to resume or extend a grid, `gunzip -k` its file first.
 
+> **Corrections from R5 (`docs/r5_findings.md`).** **(1) Every ceiling here is causal.** Advancing
+> the output by its best lag (0–64 ms) and choosing the readout window afresh raises the best
+> ceiling by 0.9 dB on MIT-BIH (1.98 → 2.86 dB), 1.4–1.5 dB on synthetic ECG and EEG, and 4.2 dB on
+> the sine (8.40 → 12.63). §1.2's heights and §2.3's "no decoder window lifts the ceiling" hold for
+> causal readouts; flatness does not change (R5 §1.2, §1.5). **(2) Every QRS F1 here is from
+> `neurokit`'s detector on the unfiltered output.** Under the same detector after its standard
+> `ecg_clean`, §3.2's sparse-output advantage vanishes (F1 0.81 at both 1 Hz and 40 Hz), and it
+> survives 4 of 6 detector variants; §2.4's QRS benefit of STDP in the shipped network survives
+> none of the 6 (R5 §2.1–§2.2). Table I's F1 column and Fig. 3's F1 panels use the unfiltered
+> detector.
+
 ---
 
 ## 0. What changed in the measurement before any R3 number was taken
@@ -392,6 +403,9 @@ MIT-BIH, 0.48 on synthetic ECG (descriptive; M3 measured 0.35–0.44 on layer 1 
 
 ### 2.3 The decoder window has an optimum and cannot lift the ceiling
 
+> **Causal readouts only (R5 §1.5).** With its delay removed, a 40 ms boxcar reaches 2.86 dB on
+> MIT-BIH, 0.88 dB above the best causal window.
+
 MIT-BIH ceiling: 0.81, 1.11, **1.92**, **1.98**, 1.34 and 0.76 dB at τ = 5, 10, 20, 40, 80
 and 160 ms. 40 ms is equivalent to 20 (+0.21 [−0.06, +0.26]); 5, 10 and 160 ms are 0.75–1.06
 dB worse. Finding 2 reported the change between the two ends of the range (−0.23 dB); the
@@ -576,6 +590,10 @@ The unprocessed input scores F1 1.00 at 10 dB and 0.22 at 0 dB with the unfilter
 and 0.58 dB at 0.25–80 Hz — twice the 40 Hz value at 2 Hz. N = 64 reaches 4.15 dB at 2 Hz.
 
 #### The sparse-output hypothesis is confirmed
+
+> **On the unfiltered detector only (R5 §2.1).** After `ecg_clean` the same detector scores F1
+> 0.81 at 40 Hz and 0.81 at 1 Hz. The hypothesis survives 4 of 6 detector × cleaning variants,
+> with a sparse-output advantage of +0.11 to +0.15 F1 where it does.
 
 Pre-registered: QRS F1 at 10 dB input is higher with the output at ≤ 2 Hz than at 40 Hz. Every
 sparse rate beats 40 Hz in every arm (Holm-adjusted p = 0.0002 at every level; every interval

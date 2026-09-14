@@ -110,6 +110,13 @@ Finding 3 did not by itself establish that the ceiling is fundamental — both f
 
 ### Finding 5 — the ceiling is not specific to rate coding
 
+> **Superseded by R5** (`docs/r5_findings.md`, Table II). Re-measured untrained, at a calibrated
+> 40 Hz for every encoder, with a latency readout for the time-to-first-spike code and a
+> delay-compensated SNR: temporal coding escapes the ceiling on 0 of 4 signals (equivalent on the
+> sine, 0.5–0.9 dB lower elsewhere, not significant), and the ceiling is flat for all three
+> encoders. The delta rows are no longer degenerate; the absolute-mode code carries `|dx/dt|`,
+> not the signal. The table below is kept for the record.
+
 | Encoder | Decoder | Ceiling (dB) | Degenerate? |
 |---|---|---:|---|
 | Poisson | Population | 1.00 ±0.34 | no |
@@ -161,6 +168,13 @@ statistics (R2), and the manuscript.
 > noisy. Restricting each neuron to a fixed fan-in of 8–16 lifts the ceiling at every output
 > rate tested, by up to 1.85 dB (5.77 dB on real ECG); unsupervised STDP instead collapses
 > layer-1 effective fan-in from 24 inputs to 3, which is why learning lowers the ceiling.
+
+**R5 qualifies two phrases, not yet adopted** (`docs/r5_findings.md` §4, for the author's review):
+every ceiling number above is causal, and removing readout delay raises it by 0.7–4.2 dB, so "not
+lifted … by any decoder window" holds for causal windows; and a time-to-first-spike code does not
+lift it either. Proposed: "… not lifted by a wider output population at a dense output, by any
+causal decoder window, by a time-to-first-spike code, or by unsupervised learning … Its height is
+set by the signal, the depth, the output firing rate and the readout's delay."
 
 *(Superseded framings, kept for the record. Before R3: "Rate-coded spiking reconstruction
 pipelines impose an output quality ceiling that is independent of input quality, population
@@ -277,7 +291,7 @@ in an unsupervised STDP pipeline, where no reference activation distribution exi
 - ~~A short section appended to `docs/phase3_findings.md`~~ **Met** — top banner plus two inline corrections at §5.6.2.
 - ~~Four CI gates stay green.~~ **Met.**
 
-**Outstanding from R1:** the detector is a dependency of the result and only `neurokit2`'s default method has been run — `pantompkins1985` / `hamilton2002` belong in R5's grid. Three seeds, not ten. See `docs/r1_findings.md` §8.
+~~**Outstanding from R1:** the detector is a dependency of the result and only `neurokit2`'s default method has been run — `pantompkins1985` / `hamilton2002` belong in R5's grid. Three seeds, not ten. See `docs/r1_findings.md` §8.~~ **Done in R5b** (`docs/r5_findings.md` §2), 16 records × 10 seeds, three detectors, raw and after `ecg_clean`: the sparse-output advantage survives 4 of 6 variants, training's QRS benefit survives none, and no network beats a standard filter under any detector.
 
 ---
 
@@ -379,12 +393,12 @@ Reporting          Every table gets an identity/control row.
   Output width 4–64: **equivalent** (+0.08 dB against +0.79 for independent neurons).
   STDP τ 5–80 ms: **equivalent** on MIT-BIH. Decoder τ: optimum 20–40 ms, no window lifts the ceiling.
   Depth: 2 / 3 / 4 layers = 2.75 / 1.92 / 1.57 dB, as the law requires.
-  **Training at a held rate lowers the ceiling** (−0.49 / −0.60 / −0.64 dB at 10 / 50 / 200 epochs); as shipped, training mostly moves the output from 65 Hz to ~1 Hz, which is what raises QRS F1.
+  **Training at a held rate lowers the ceiling** (−0.49 / −0.60 / −0.64 dB at 10 / 50 / 200 epochs); as shipped, training mostly moves the output from 65 Hz to ~1 Hz, which is what raises QRS F1 *on the unfiltered detector* — after `ecg_clean` that benefit is not significant at any input (R5 §2.2).
 
 ### C3 — Operating region
 
 - [x] **Fig. 3 (a, b)** — the `(N_in, g_syn)` plane, untrained and trained. Untrained: silent below g = 11.5 → 3.4 and saturated above >300 → 23 as N_in goes 8 → 256; usable band narrows from >4.7 to 2.6 octaves; shipped g = 30 leaves it at N_in ≥ 128. Trained: no usable gain at all at N_in ≥ 128.
-- [x] **Fig. 3 (c, d)** — the output-rate axis (added by R1 §5). **Sparse-output hypothesis confirmed**: QRS F1 0.77 at 1 Hz against 0.04 at 40 Hz, untrained. **The ceiling depends on output rate**: MIT-BIH 2.71 dB at 5 Hz (N = 64) against 1.99 at 40 Hz; synthetic ECG doubles at 2 Hz. Every earlier ceiling number was taken at 40 Hz.
+- [x] **Fig. 3 (c, d)** — the output-rate axis (added by R1 §5). **Sparse-output hypothesis confirmed on the unfiltered detector**: QRS F1 0.77 at 1 Hz against 0.04 at 40 Hz, untrained. *R5 §2.1: after `ecg_clean`, 0.81 against 0.81; it survives 4 of 6 detector variants.* **The ceiling depends on output rate**: MIT-BIH 2.71 dB at 5 Hz (N = 64) against 1.99 at 40 Hz; synthetic ECG doubles at 2 Hz. Every earlier ceiling number was taken at 40 Hz.
 
 ### Acceptance criteria
 
@@ -562,23 +576,24 @@ argument change.
 
 ---
 
-## Stage R5 — Generality
+## Stage R5 — Generality — **COMPLETE**
 
-**Duration:** 1 week
+**Duration:** 1 week budgeted; done in one session of compute and analysis.
 **Goal:** Establish that this is an *architecture class* property, not a NeuroFlux quirk. Without this, it is not an architecture paper.
+**Result:** `docs/r5_findings.md`. Code: `scripts/r5_generality/`. Table II: `results/r5_generality/figures/table2_generality.tex`.
 
-**The repository is unusually well-placed for this.** Three encoders, two decoders and five metrics are fully implemented, tested, and used by nothing. The audit flagged them as dead code; for this paper they are the generality evidence.
-
-- [ ] **Encoder generality** — repeat C1 with `TemporalEncoder` and `DeltaEncoder`. Rate coding may be the culprit; latency and delta coding are the natural controls. **If the ceiling disappears under temporal coding, that is a headline result**, and it reframes the paper as "rate coding specifically is the problem."
-- [ ] **Decoder generality** — repeat with `SpikeRateDecoder`.
-- [ ] **Signal generality** — synthetic ECG, real MIT-BIH ECG, EEG, sine. Already supported by the CLI.
-- [ ] **Topology generality** — depth 2/3/4, and a non-tiled input where the 32 channels carry genuinely different values (a short delay-line embedding) rather than 32 copies of one scalar. **All 32 input channels currently carry identical values**, so this tests whether the population is doing anything beyond variance reduction.
-- [ ] **Produces:** Table II — ceiling across the encoder × decoder × signal × topology grid.
+- [x] **Encoder generality** — Poisson, time-to-first-spike and delta encoders, all at 40 Hz, on four signals, −10 to +40 dB and noiseless, output at 40 and 5 Hz. **The ceiling does not disappear under temporal coding**: with a latency readout built for it, it escapes on 0 of 4 signals (equivalent to Poisson on the sine; 0.5–0.9 dB lower on ECG and EEG, not significant). A latency code needs a dense output: at 5 Hz it falls 2.7–5.3 dB below Poisson. The delta threshold is now calibrated and no run is degenerate, but the absolute-mode code carries `|dx/dt|` (0 dB on the sine).
+- [x] **Decoder generality** — population (τ 10/20/40 ms), spike rate (20/40/80 ms), latency. Flat under every decoder. On MIT-BIH the best spike-rate and best population readouts are equivalent; the pre-registered matched-bandwidth criterion is **not met** (a boxcar beats a half-width exponential by 0.65–0.69 dB, through phase once delay is compensated; §1.3).
+- [x] **Signal generality** — MIT-BIH (16 records), synthetic ECG, EEG, sine; flat on all (24 of 24 cells).
+- [~] **Topology generality** — not re-run: M1a already covers independent and delay-line input (16 records × 10 seeds), and R3 C2 covers depth. Scope statement in `r5_findings.md` §3.
+- [x] **Detector robustness** (R1 outstanding, next action 16) — three detectors, raw and cleaned: see the R1 section above.
+- [x] **Produces:** Table II.
+- **Post hoc:** every ceiling so far is causal; the offline ceiling is 0.7–4.2 dB higher (§1.5, next action 19).
 
 ### Acceptance criteria
 
-- The ceiling is demonstrated (or refuted) across ≥ 2 encoders, ≥ 2 decoders, ≥ 3 signal types.
-- An explicit statement of scope: which architecture class the claim covers and which it does not.
+- ~~The ceiling is demonstrated (or refuted) across ≥ 2 encoders, ≥ 2 decoders, ≥ 3 signal types.~~ **Met** — 3 encoders, 3 readout kinds, 4 signals, 2 output rates.
+- ~~An explicit statement of scope: which architecture class the claim covers and which it does not.~~ **Met** — `r5_findings.md` §3.
 
 ---
 
@@ -681,7 +696,9 @@ Run R0 first, and do not defer it.
 
 ## Immediate next actions
 
-**R0, R1, R2, R3, M1a, M1b, M2, M3 and M4 are complete.** R3 changed three things the
+**R0–R5, M1a, M1b and M2–M4 are complete; R6 (the manuscript) is next.** R5 added two
+constraints on it: every ceiling number is causal (item 19), and every QRS number depends on the
+detector's filter (item 16). R3 changed three things the
 remaining stages depend on: the ceiling's height is a function of output rate (every mechanism
 number so far is at 40 Hz), the cascade law is exact only in `S/N` terms at the input's own
 operating point, and the QRS "doing nothing" baseline never filtered. Items 13–17 follow from
@@ -714,16 +731,17 @@ those.
    Eq. 4 is our column-cosine result); author lists fixed; A3 summary corrected; G3 constrains
    the DPI framing; DCPA-SNN (2026) added as the closest competitor. **D4 still blocked**
    (needs an institutional route).
-8d. **Still owed from this block:** the detector-method robustness check (R5). ~~The output-rate
+8d. ~~**Still owed from this block:** the detector-method robustness check (R5).~~ **Done (R5b).** ~~The output-rate
    sweep that tests R1 §5's sparse-output hypothesis (R3 C3).~~ **Done** — confirmed; F1 0.77 at
    1 Hz against 0.04 at 40 Hz (`r3_findings.md` §3.2).
 9. ~~Run M4's density sweep at fixed fan-in.~~ **Done** — `docs/m4_findings.md`.
 10. ~~Findings 2 and 5 under per-layer rate control — folded into R3 C2 and R5.~~ **Finding 2
     done in R3 C2.** Finding 5's encoder × decoder table remains R5's grid, which must run under
     per-layer and encoder rate control **at both 40 Hz and the rate optimum** (item 13).
+    **Done (R5a, Table II)** — at 40 and 5 Hz outputs.
 11. ~~Finish R0's residual reads~~ **Mostly done (8c).** Moreno-Bote 2014 (A1) was already
     `[read]`; Kanitscheider 2015 is now read and verified. Only D4 remains, blocked on access.
-12. **Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.
+12. ~~**Tune the Delta encoder threshold** before R5, or report it as out of scope. Its rows are currently degenerate and prove nothing.~~ **Done** — `calibrate_delta_threshold` holds it at 40 Hz; every delta run is `ok` (R5 §1.4).
 13. ~~Re-check the mechanism at the rate optimum (R4).~~ **Done (R4b §3)** — both predictions
     supported. Width slope +0.28 dB/doubling at a 5 Hz output against +0.20 at 40 Hz (p = 0.008);
     M4's fan-in gain holds at every rate and peaks at 20 Hz (+1.85 dB, `[512,512]` K = 16,
@@ -742,7 +760,7 @@ those.
     encoder's range is the noisy drive's own min and max. Test a robust range estimate.
 15. ~~Rewrite the framing statement for R3.~~ **Done** — the §4 draft was reviewed and adopted
     above; the mechanism sentences wait for R4b.
-16. **Every QRS comparison is scored with and without `ecg_clean`** — R5's detector check,
+16. ~~**Every QRS comparison is scored with and without `ecg_clean`**~~ **Done for R5b's re-runs of R3 C1 and C3** (`r5_findings.md` §2); Phase 4's baselines and the manuscript still owe it. *Original:* R5's detector check,
     Phase 4's baselines, and anything the manuscript says about beat recovery. A standard
     filter gives median F1 0.92–1.00 where the best network median is 0.71 (`r3_findings.md`
     §1.6).
@@ -756,8 +774,16 @@ those.
     collapse. Test with each column's participation ratio against intrinsic `S/N`.
 18. **Open from R4b:** does a fan-in constraint *during* STDP prevent the collapse, so learning
     helps instead of hurting? And how much of the operating-point cost do the encoder-rate and
-    layer-gain calibrations carry? Candidates for R5's topology arm or the manuscript's
-    limitations.
+    layer-gain calibrations carry? Not run in R5; for the manuscript's limitations or a follow-up.
+19. **Every ceiling in the manuscript says "causal"** (R5 §1.5). Advancing the output by its
+    best lag raises the best MIT-BIH ceiling from 1.98 to 2.86 dB and the sine's from 8.40 to
+    12.63. Decide whether Figs. 1–3 stay causal (consistent with the cascade-law validation) with
+    the offline numbers in Table II, or both are shown.
+20. **The QRS rows of Table I and the F1 panels of Fig. 3 use the unfiltered detector** (R5 §2).
+    Label them so, or re-score with `ecg_clean`, before they go in the manuscript.
+21. **Open from R5, limitation or follow-up:** a signed step-forward delta code (a baseline shared
+    by both polarities) through sign-separated pathways. `DeltaEncoder` cannot produce it, and a
+    non-negative single-pool network cannot carry it.
 ---
 
 ## What success looks like

@@ -103,6 +103,10 @@ that is the ceiling any processed score is read against.
 
 ### 4.1 The Phase 3 networks against doing nothing
 
+> **Detector check (R5, `docs/r5_findings.md` §2.2–§2.3).** These comparisons use `neurokit`'s
+> detector on unfiltered signals. After `ecg_clean`, the passive network's F1 at ≥ 5 dB rises to
+> 0.57–0.78. It still falls short of the cleaned input's 1.00, but "destroys" overstates the harm.
+
 Source: `results/r2_reanalysis/qrs_rescore.db` (16 records × 5 input SNRs ×
 {0, 10, 50} epochs × 10 seeds, `configs/r2/qrs_rescore.yaml`) and
 `results/r2_reanalysis/identity_comparisons.csv`, from
@@ -153,6 +157,10 @@ behaves like the *trained* uniform network, not like the untrained one. §5 says
 why.
 
 ## 5. What actually preserves landmarks: a sparse output
+
+> **Detector check (R5, `docs/r5_findings.md` §2.1, §2.4).** A sparse output helps the unfiltered
+> detector. After `ecg_clean` a dense 40 Hz output is as detectable as a 1 Hz one (F1 0.81 each),
+> so what a dense output loses here is hidden from an unfiltered detector, not destroyed.
 
 Two observations had to be reconciled. M1b's per-layer gain calibration, which
 every mechanism experiment from M2 on uses, collapses QRS F1 to about zero at
