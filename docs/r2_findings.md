@@ -166,6 +166,15 @@ merely fail to reject.
 
 ## 5. Re-run on QRS F1: both R-peak conclusions reverse
 
+> **Detector check (R5, `docs/r5_findings.md` §2.2).** Every F1 in this section is `neurokit`'s
+> detector on the unfiltered signal. Re-tested on R3 C1's shipped networks (Gaussian noise at true
+> SNR) under three detectors, raw and after `ecg_clean`, "10 epochs raise F1 over passive at every
+> input" survives none of the six variants. On the unfiltered `neurokit` detector the direction
+> replicates (+0.30 to +0.64). After cleaning, the passive network scores 0.33–0.78 instead of
+> 0.05–0.16, level with the trained network at 20 dB. "Passive destroys QRS recoverability at
+> ≥ 5 dB" becomes "harms it": 0.57–0.78 against the cleaned input's 1.00. The reversal of
+> `rpeak_integrity` in §5.1 is unaffected.
+
 **Source:** `results/r2_reanalysis/qrs_rescore.db` — 16 records × 5 input SNRs (−5 to 20 dB)
 × {0, 10, 50} epochs × 10 seeds, flicker 50 Hz, τ 20 ms, all in one database from one config
 (`configs/r2/qrs_rescore.yaml`). The runner now records annotation-referenced QRS scores next to
