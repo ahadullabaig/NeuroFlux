@@ -40,6 +40,17 @@ the law was written down:
 The law is stated in linear power ratios; every function here takes and
 returns dB for consistency with the rest of `metrics`.
 
+**Which SNR the law is about.** The derivation is in terms of signal-to-noise
+power, `S/N`. The repository scores reconstructions with *affine-corrected*
+SNR (`metrics.reconstruction`), and that is not the same quantity: a best-fit
+scale and offset leave a residual of `var(x) * (1 - rho^2)`, so the affine SNR
+is `1 / (1 - rho^2)`, and for a signal plus independent noise that is exactly
+`1 + S/N`. It can never fall below 0 dB. Feeding affine values straight into
+the law therefore breaks it wherever `S/N` is small — on MIT-BIH it
+over-predicts the loss by about 2 dB at −20 dB input (`docs/r3_findings.md`
+C1). Convert with `affine_to_excess_db` before applying the law, and back with
+`excess_to_affine_db`; the two forms agree once every term is well above 0 dB.
+
 See `docs/m3_findings.md` for the derivation of `Lambda_k` itself from spike
 statistics, and for the measurements that test all of the above.
 """
@@ -69,6 +80,42 @@ def linear_to_db(snr_linear: float) -> float:
     if math.isinf(snr_linear):
         return math.inf
     return float(10.0 * math.log10(snr_linear))
+
+
+def affine_to_excess_db(snr_affine_db: float) -> float:
+    """
+    The signal-to-noise ratio an affine-corrected SNR implies, in dB.
+
+    Affine-corrected SNR is `1 + S/N` in linear terms (see the module
+    docstring), so this returns `10 * log10(10^(x / 10) - 1)`.
+
+    Args:
+        snr_affine_db: An affine-corrected SNR in dB.
+
+    Returns:
+        `S/N` in dB: `inf` for an infinite input, `-inf` at or below 0 dB, where
+        the reconstruction carries no linear information about the signal.
+    """
+    if math.isinf(snr_affine_db):
+        return snr_affine_db
+    return linear_to_db(db_to_linear(snr_affine_db) - 1.0)
+
+
+def excess_to_affine_db(snr_excess_db: float) -> float:
+    """
+    The affine-corrected SNR a given `S/N` produces, in dB.
+
+    The inverse of `affine_to_excess_db`: `10 * log10(1 + 10^(x / 10))`.
+
+    Args:
+        snr_excess_db: A signal-to-noise ratio in dB; `-inf` means no signal.
+
+    Returns:
+        The affine-corrected SNR in dB, never below 0 dB.
+    """
+    if math.isinf(snr_excess_db):
+        return 0.0 if snr_excess_db < 0.0 else math.inf
+    return linear_to_db(1.0 + db_to_linear(snr_excess_db))
 
 
 def intrinsic_snr_db(input_snr_db: float, output_snr_db: float) -> float:

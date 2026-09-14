@@ -20,9 +20,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from neuroflux_core.metrics.cascade import (
+    affine_to_excess_db,
     cascade_snr_db,
     ceiling_db,
     db_to_linear,
+    excess_to_affine_db,
     intrinsic_snr_db,
     linear_to_db,
     retention,
@@ -325,3 +327,51 @@ def test_np_float_inputs_are_accepted() -> None:
     assert cascade_snr_db(
         float(np.float64(19.47)), [float(np.float64(x)) for x in SHIPPED_LAMBDAS]
     ) == pytest.approx(1.33, abs=0.15)
+
+
+# --------------------------------------------------------------------------
+# Affine-corrected SNR is 1 + S/N — the law must be applied to S/N
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("snr_db", [-20.0, -5.0, 0.0, 3.0, 20.0])
+def test_affine_snr_of_signal_plus_noise_is_one_plus_s_over_n(snr_db: float) -> None:
+    """The identity the conversion rests on, checked on data rather than algebra."""
+    from neuroflux_core.metrics.reconstruction import affine_corrected_snr
+
+    rng = np.random.default_rng(0)
+    clean = np.sin(np.linspace(0, 400 * np.pi, 200_000))
+    noise = rng.normal(0.0, 1.0, clean.size)
+    noise *= np.sqrt(np.var(clean) / db_to_linear(snr_db) / np.var(noise))
+    measured = affine_corrected_snr(clean, 0.3 * (clean + noise) - 2.0)
+    assert affine_to_excess_db(measured) == pytest.approx(snr_db, abs=0.05)
+
+
+def test_excess_and_affine_round_trip() -> None:
+    for value in (-30.0, -3.0, 0.0, 1.7, 25.0):
+        assert affine_to_excess_db(excess_to_affine_db(value)) == pytest.approx(value)
+
+
+def test_excess_conversion_limits() -> None:
+    assert affine_to_excess_db(0.0) == -math.inf
+    assert affine_to_excess_db(math.inf) == math.inf
+    assert excess_to_affine_db(-math.inf) == 0.0
+    assert excess_to_affine_db(math.inf) == math.inf
+    # Well above 0 dB the two scales agree.
+    assert affine_to_excess_db(40.0) == pytest.approx(40.0, abs=1e-3)
+
+
+def test_applying_the_law_to_affine_values_overstates_low_snr_loss() -> None:
+    """
+    The R3 C1 correction in miniature: a 1.8 dB-ceiling pipeline fed a −20 dB
+    input. In S/N terms the output is a hair above 0 dB affine; applied to the
+    affine values directly, the law predicts about −2 dB, which the metric
+    cannot even produce.
+    """
+    ceiling, input_db = 1.8, excess_to_affine_db(-20.0)
+    direct = cascade_snr_db(input_db, [ceiling])
+    corrected = excess_to_affine_db(
+        cascade_snr_db(affine_to_excess_db(input_db), [affine_to_excess_db(ceiling)])
+    )
+    assert direct < -1.5
+    assert 0.0 < corrected < 0.05
