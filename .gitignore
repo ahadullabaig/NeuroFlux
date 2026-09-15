@@ -144,3 +144,7 @@ results/r4b_mechanism/*.csv
 
 # R5 raw grids, as for R3.
 results/r5_generality/*.csv
+
+# ICEE 2026 paper build output
+paper/icee2026/build/
+paper/icee2026/build.log
