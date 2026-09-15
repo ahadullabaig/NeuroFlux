@@ -88,10 +88,10 @@ memory, and which design choices buy it most cheaply?
 Earlier, we reported that feed-forward networks of leaky integrate-and-fire
 (LIF) neurons that reconstruct a biosignal from rate-coded spikes reach a
 fidelity \emph{ceiling}~\cite{baig2026icee}. Their output
-signal-to-noise ratio (SNR) stops improving as the input improves; a cascade
-law in the form of Friis's noise formula~\cite{friis1944noise} predicts the
-ceiling; noise that neurons share sets it; and giving each neuron a fixed
-fan-in of 8--16 inputs raises it. That work measured fidelity only. Here we
+signal-to-noise ratio (SNR) stops improving as the input improves. The
+plateau follows a cascade law shaped like Friis's formula for chains of noisy
+amplifiers~\cite{friis1944noise}; its height is set by error the neurons have
+in common; and limiting every neuron to between 8 and 16 inputs lifts it. That work measured fidelity only. Here we
 attach hardware costs to every design point, add two levers the earlier grids
 never varied, and test the designs that come out on data held back for the
 purpose. Our contributions are:
@@ -183,20 +183,22 @@ fixed fan-in, synaptic work does not depend on the pool width.}
 \end{figure}
 
 \subsection{The signal chain}
-A signal sampled at 250~Hz (4~ms steps) drives $\Nin$ Poisson channels. Each
-fires with probability proportional to the signal's amplitude normalized to the
-drive's own range, so the channels carry the same signal with independent
-counting noise; we call them the \emph{input pool}. LIF neurons (rest
-$-70$~mV, threshold $-55$~mV, reset $-80$~mV, membrane time constant 20~ms,
-refractory period 2~ms) integrate weighted input spikes. In a fixed-fan-in
+A signal sampled at 250~Hz (4~ms steps) drives $\Nin$ Poisson channels. At
+every step, a channel's firing probability scales with where the current
+sample lies between the smallest and largest values of the drive, so all
+channels carry one signal with independent counting noise; we call them the
+\emph{input pool}. The neurons are leaky integrate-and-fire units with a
+resting potential of $-70$~mV, a $-55$~mV threshold, a $-80$~mV reset, a 20~ms
+membrane time constant and a 2~ms refractory period. In a fixed-fan-in
 layer each neuron reads exactly $K$ channels chosen at random, with weights
 uniform on $[0,1]$; dense layers read every channel, with weights uniform on
-$[0, 0.3]$. The output is the mean of
-the output neurons' exponentially filtered spike trains (time constant 20~ms),
-a causal readout. The networks are untrained. The encoder's maximum rate and
-each layer's gain are bisected until the encoder and every layer fire at their
-target rates, $r_0$ and $r_1$, a form of the rate normalization used to convert
-networks to spikes~\cite{diehl2015balancing,rueckauer2017conversion}. We write
+$[0, 0.3]$. A causal readout smooths each output neuron's spike train with an
+exponential filter of 20~ms time constant and averages the traces into
+$\hat{x}$. No network is trained. Firing rates are pinned by bisection: the
+encoder's peak rate and one gain per layer are adjusted until the encoder runs
+at $r_0$ and each layer at its target, $r_1$ for a single layer, in the manner
+of rate normalization for converted
+networks~\cite{diehl2015balancing,rueckauer2017conversion}. We write
 networks as their widths, input pool first: $[512,128]$ is a 512-channel pool
 and one layer of 128 neurons.
 
@@ -221,11 +223,12 @@ updates every neuron at every 4~ms step, $250 \sum_k S_k$ reads and $250
 $E$ from each run's measured rates.
 
 \subsection{Fidelity and its budget}
-A readout's gain and offset are arbitrary, so fidelity is the affine-corrected
-SNR: $\hat{x}$ is regressed onto the clean signal $x$ and scored as
-$\mathrm{var}(x)/\mathrm{var}(x - \hat{x})$. For signal plus independent noise
-this equals $1 + \SN$, with $\SN$ the signal-to-noise power ratio. The
-\emph{ceiling} $C$ is the output SNR at a noiseless input. Inverse S/N adds
+The scale and offset of a readout carry no information, so we fit them away:
+$\hat{x}$ is regressed onto the clean signal $x$, and fidelity is the
+affine-corrected SNR, $\mathrm{var}(x)/\mathrm{var}(x - \hat{x})$. When the
+reconstruction is the signal plus independent noise, this score equals
+$1 + \SN$, where $\SN$ is the signal-to-noise power ratio. The score reached
+from a noiseless input is the \emph{ceiling}, $C$. Inverse S/N adds
 along the chain~\cite{baig2026icee},
 \begin{equation}
 \frac{1}{\SN_\mathrm{out}} = \frac{1}{\SN_\mathrm{in}} + \sum_k
@@ -260,12 +263,13 @@ design with $K = 8$ of Section~\ref{sec:designs}.}
 \section{Experimental Method}
 \label{sec:method}
 
-\emph{Signals.} Real ECG comes from 16 records of the MIT-BIH Arrhythmia
-Database~\cite{moody2001impact,goldberger2000physionet}. Each random seed
-selects a different artifact-free 10~s window, resampled to 250~Hz. We add a
-synthetic electroencephalogram (EEG) with 10, 20 and 40~Hz components of
-random phase, and a 2~Hz sine. Gaussian noise is scaled so that the input SNR
-equals its nominal value exactly.
+\emph{Signals.} The ECG data are 16 records from the MIT-BIH Arrhythmia
+Database~\cite{moody2001impact,goldberger2000physionet}; each random seed picks
+another 10~s segment free of artifact annotations, resampled to 250~Hz. Two
+synthetic signals complete the set: an electroencephalogram (EEG) built from
+randomly phased 10, 20 and 40~Hz sinusoids, and a sine wave at 2~Hz. Additive
+Gaussian noise is rescaled for every segment to hit the nominal input SNR
+exactly.
 
 \emph{Grids.} The landscape combines 76 MIT-BIH design points from our earlier
 grids~\cite{baig2026icee}, covering depth, width, output rate, training and fan-in, with a
@@ -283,12 +287,12 @@ at least 103 clean windows. It uses noiseless, 10\dB{} and 0\dB{} inputs on
 MIT-BIH, EEG and the sine. Earlier grids used 10 seeds, and the pool and device
 grids used seeds 0--4.
 
-\emph{Statistics.} The unit of analysis is a record ($n = 16$) or, for
-synthetic signals, a seed ($n = 10$). SNRs average a unit's runs. Paired
-comparisons report the median difference with a bias-corrected and
-accelerated (BCa) bootstrap 95\% interval and the Wilcoxon signed-rank test,
-with Holm correction within families. Equivalence uses two one-sided tests at
-$\pm0.5$\dB. The tests and decision rules of the pool, device and confirmation
+\emph{Statistics.} Records ($n = 16$) are the statistical units on ECG and
+seeds ($n = 10$) on the synthetic signals, and each unit's SNR is the mean over
+its runs. For every paired comparison we give the median difference, its
+95\% bias-corrected and accelerated (BCa) bootstrap interval, and a Wilcoxon
+signed-rank $p$ value, Holm-adjusted within a family. Equivalence is claimed
+only when two one-sided tests reject a difference of $\pm0.5$\dB. The tests and decision rules of the pool, device and confirmation
 grids were written into their scripts before each grid ran, and those of the
 device and confirmation grids, with the device grid's numeric predictions, were
 committed to version control first; analyses designed after seeing data are
@@ -313,8 +317,8 @@ eightfold buys 0.45\dB{} for 6.6 times the synaptic work, about 0.2\dB{} per
 doubling. Widening a fixed-fan-in layer from $[128,128]$ with $K = 8$ to
 $[512,512]$ with $K = 16$ buys the same rate, 0.21\dB{} per doubling. Fixing
 fan-in is the one change in Table~\ref{tab:levers} that raises fidelity and
-cuts cost together. The output rate is the largest operating-point lever
-($+0.65$\dB{} at 5~Hz) but moves almost no synaptic work: the encoder's spikes
+cuts cost together. Output rate moves the ceiling more than any other
+operating-point setting ($+0.65$\dB{} at 5~Hz) yet barely changes synaptic work: the encoder's spikes
 into the first layer account for 80\% of the synaptic operations in
 $[32,16,8]$ and all of them in a one-layer network, while output spikes feed
 only the readout.
@@ -348,8 +352,9 @@ Slowing the encoder halves synaptic work per halving of $r_0$ and costs
 with the widest pool. The budget~\eqref{eq:budget} prices this. Fitted to each
 record's ceilings at 20 and 40~Hz, it predicts the 10~Hz ceiling with a median
 absolute error of 0.067\dB{} (90th percentile 0.20\dB) over 128
-record--architecture cells spanning 0.7 to 8.0\dB{} (Fig.~\ref{fig:pool}c). Encoder counting noise is 44\% of the output noise
-with a 32-channel pool and 10\% with 2048 channels (Fig.~\ref{fig:pool}b), and
+record--architecture cells spanning 0.7 to 8.0\dB{} (Fig.~\ref{fig:pool}c). With $N_1 = 128$, encoder counting noise is 44\% of
+the output noise with a 32-channel pool and 10\% with 2048 channels
+(Fig.~\ref{fig:pool}b; 44\% and 19\% with $N_1 = 32$), and
 the remainder $\Lambda_\mathrm{rest}$, the layer's own shared error, barely
 moves: 5.6 to 6.1\dB{} at $N_1 = 128$. A wide pool makes the encoder rate
 cheap to cut; nothing in the input budget lifts a $K = 8$ layer much past
@@ -512,8 +517,8 @@ synaptic work. On a clock-driven core only the synapse count matters, and a
 wide pool adds comparisons.
 
 \emph{What the budget does and does not price.} Equation~\eqref{eq:budget}
-prices the encoder: its counting term follows $1/r_0$ to a few hundredths of a
-dB. Effective fan-in ranks device losses, but a model that holds the
+prices the encoder: its counting term follows $1/r_0$ within hundredths of a
+decibel. Effective fan-in ranks device losses, but a model that holds the
 remainder fixed overstates them. Designers can use the counting term to set
 rates, but device budgets should be measured, as in Table~\ref{tab:devices}.
 

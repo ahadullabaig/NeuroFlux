@@ -45,9 +45,14 @@ Pre-registration commits, each made before its grid ran:
 - [ ] **ICEE citation (`baig2026icee`).** After 14 Oct 2026, change it to "to appear" if ICEE
       accepts. If ICEE rejects, remove it and state the ceiling, the law and the fan-in rule
       directly. Declare the ICEE paper as related prior work in EDAS.
-- [ ] **Overlap check.** No sentence may be copied from `paper/icee2026/main.tex`.
-- [ ] **Number audit.** Every number in `main.tex` must match an analysis CSV, as was done for
-      ICEE.
+- [x] **Overlap check.** No sentence may be copied from `paper/icee2026/main.tex`.
+      `uv run python scripts/paper_mcsoc2027/overlap.py` reports no shared run of six or more
+      words, no sentence with trigram overlap ≥ 0.3, and no shared figure file. The first run
+      found 19 runs in the Methods, now rewritten. Re-run after every edit.
+- [x] **Number audit.** Every number in `main.tex` must match an analysis CSV.
+      `uv run python scripts/paper_mcsoc2027/audit.py` gives 124 checks passed and 0 failed,
+      plus a list of sentences with numbers no check covers, for a human read. Re-run after
+      every edit.
 - [ ] **Page budget.** The draft is 6 of 8 pages with the four additions (Fig. 3c, Table II
       hardware columns, Fig. 5 noisy inputs, the mapping-to-hardware subsection). Use the rest
       for substance, not padding.
