@@ -3,7 +3,9 @@
 **Status:** pilot B and grid B2 complete. **The frame decision is met:** cost against fidelity
 is the MCSoC paper's frame (§3). Pilot A (weight precision and device faults) is complete (§5–§6):
 the hardware tolerates 1-bit weights and heavy device variation, but the budget model overstates
-fault losses, so the model's claim stays with encoder rate and input pool.
+fault losses, so the model's claim stays with encoder rate and input pool. **The confirmation
+grid (§7) confirmed every headline claim on unseen ECG windows, at noisy inputs, and on EEG and
+a sine.**
 **Why this stage exists:** the ICEE 2026 paper already claims the flat ceiling, the cascade law,
 the K = 8–16 fan-in rule and STDP's collapse of fan-in. The next paper goes to the NeuroCore
 summit at IEEE MCSoC 2027, an architecture venue whose reviewers will ask what a design point
@@ -414,4 +416,65 @@ By the reading rule, PA3 failed. The budget model's claim stays with encoder rat
   and a 40 Hz encoder, `[2048,128]` keeps 5.19 dB against 4.84 dB at `[128,128]`.
 - **A limitation the paper must state if it uses the budget:** effective fan-in ranks device
   losses, but the budget overstates them by about 2×, most in narrow pools.
+
+## 7. Confirmation grid — the paper's headline designs on unseen data
+
+- **Grid.** `results/h1_hardware_cost/confirm_grid.csv.gz`: 3,240 runs, 0 failures, every run
+  `ok`.
+- **Rules.** `scripts/h1_hardware_cost/confirm_grid.py`, committed in 19766c5 before the grid
+  ran. The code was smoke-tested only on 2 s windows, which are not grid rows.
+- **Data.** Seeds 10–19. On MIT-BIH these are artifact-free windows no earlier grid used; every
+  record has at least 103.
+- **Inputs.** Noiseless, 10 dB and 0 dB, on MIT-BIH (16 records), synthetic EEG and a sine
+  (10 seeds each).
+- **Analysis.** `analyse_confirm.py`, output in `analysis/confirm_{tests,cells}.csv`.
+
+| design | layers | fan-in | encoder | MIT-BIH ceiling (dB) | synaptic ops/s | spikes/s | synapses |
+|---|---|---:|---:|---:|---:|---:|---:|
+| D0 shipped architecture | `[32,16,8]`, 40;40 Hz | dense | 40 Hz | 1.72 | 25,599 | 2,235 | 640 |
+| D1 previous best | `[512,512]`, 20 Hz | 16 | 40 Hz | 6.08 | 327,738 | 30,760 | 8,192 |
+| **D2 headline** | `[512,128]`, 20 Hz | 8 | 40 Hz | **5.94** | **40,967** | **23,052** | **1,024** |
+| **D3 headline, 2-bit** | as D2 | 8 | 40 Hz | **5.94** | 40,967 | 23,050 | 1,024 |
+| D4 wide pool, slow encoder | `[2048,128]`, 20 Hz | 8 | 10 Hz | 5.35 | 10,241 | 23,046 | 1,024 |
+| D5 narrow pool | `[128,128]`, 20 Hz | 8 | 40 Hz | 5.44 | 40,964 | 7,671 | 1,024 |
+
+### 7.1 Pre-registered tests — all held
+
+| test | result | verdict |
+|---|---|---|
+| C1, D2 vs D1 | −0.23 dB [−0.45, +0.02], TOST p = 5 × 10⁻⁴ | **held**, equivalent |
+| C2, D3 vs D2 | −0.00 dB [−0.02, +0.01], TOST p = 10⁻²² | **held**, equivalent |
+| C3, D4 vs D5 | −0.06 dB [−0.12, +0.04], lower bound above −0.5 | **held**, non-inferior |
+| C4, costs | D2 uses 0.125× D1's synaptic operations and 0.75× its spikes. D4 uses 0.250× D5's synaptic operations and 3.00× its spikes, so the **break-even is 2.00**: D4 is cheaper when a spike costs less than two synaptic operations | **held** |
+| C5, D2 vs D1 with noisy input | 10 dB: −0.27 [−0.43, −0.08]; 0 dB: −0.22 [−0.27, −0.12]; both equivalent | **held** |
+| G1, D2 vs D1 on other signals | EEG: −0.09 [−0.29, +0.01]; sine: +0.21 [+0.16, +0.30]; both non-inferior | **held** |
+
+By the reading rule, the paper may say the headline design matches the best earlier ceiling
+with 2-bit weights, quoting this grid, and the break-even example uses D4 and D5.
+
+**Wording.** C1's point estimate is −0.23 dB and its interval reaches only +0.02, so "matches"
+means *equivalent within ±0.5 dB, about 0.2 dB lower*, not identical. The paper says that.
+
+### 7.2 Descriptive
+
+These were not tested.
+
+- **Against the shipped architecture.** D2 scores 5.94 against D0's 1.72 dB on MIT-BIH: six
+  times the `S/N` (2.93 against 0.49), for 1.6× the synaptic operations, 1.6× the synapses and
+  10× the spikes.
+- **Weight memory.** D3 stores 2,048 bits of weights (1,024 synapses × 2 bits), against 262,144
+  for D1 at 32-bit weights: 128× less, before addresses.
+- **Across signals.** Ceilings, D0 to D5:
+  - EEG: 2.03, 3.24, 3.11, 3.13, 2.97, 3.06;
+  - sine: 7.52, 12.18, 12.35, 12.39, 12.26, 11.87.
+  The one-layer fixed-fan-in designs beat the shipped architecture by 0.9–1.1 dB on EEG and
+  4.4–4.9 dB on the sine.
+- **The break-even pair under noise.** It holds at noiseless input only. With noise, the slow
+  encoder falls behind: on MIT-BIH D4 minus D5 is −0.10 dB at 10 dB input and −0.13 at 0 dB
+  (difference of medians). On EEG and the sine the gap is 0.3–0.7 dB. The paper should state
+  the break-even for clean input and note this.
+- **Noisy beats noiseless in a few cells.** On EEG and the sine, some outputs at 10 dB input
+  exceed the noiseless ceiling: EEG D1 3.72 against 3.24, sine D1 12.36 against 12.18. This is
+  consistent with R3 §1.5 and R4b §2 (the noisy drive's min and max set the encoder range, which
+  matters most on smooth signals), but it is not tested here.
 
