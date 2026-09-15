@@ -219,6 +219,9 @@ Ceiling (dB, median over records):
 
 **Frame decision: met, by F1 and by F2.**
 
+P2b's per-record predictions and measurements are saved to `analysis/b2_p2b_cells.csv`: 128
+cells, with measured 10 Hz ceilings from 0.65 to 8.03 dB.
+
 ### 3.2 The fronts, R3 + R4b + B2
 
 | synaptic-operation front | ceiling (dB) | synaptic ops/s | spikes/s |
@@ -457,6 +460,26 @@ means *equivalent within ±0.5 dB, about 0.2 dB lower*, not identical. The paper
 
 ### 7.2 Descriptive
 
+**Static costs.** These come from the design alone and are written to `confirm_cells.csv`.
+Weight memory counts exact weights at 32 bits, plus an input address per synapse of a
+fixed-fan-in layer (dense layers need none). Clock-driven work is 250 steps per second.
+
+| design | weight memory (bits) | clock synapse reads/s | clock neuron updates/s |
+|---|---:|---:|---:|
+| D0 | 20,480 | 160,000 | 6,000 |
+| D1 | 335,872 | 2,048,000 | 128,000 |
+| D2 | 41,984 | 256,000 | 32,000 |
+| D3 | 11,264 | 256,000 | 32,000 |
+| D4 | 44,032 | 256,000 | 32,000 |
+| D5 | 39,936 | 256,000 | 32,000 |
+
+D3 needs 30× less weight memory than D1 with addresses included, and 128× less counting weights
+alone. The pool and the encoder rate change no clock-driven cost.
+
+**Noisy inputs on EEG and the sine** were not tested; G1 was noiseless. D2's median there falls
+0.35–0.67 dB below D1's: EEG −0.40 at 10 dB and −0.41 at 0 dB; sine −0.67 at 10 dB and −0.35 at
+0 dB (differences of medians).
+
 These were not tested.
 
 - **Against the shipped architecture.** D2 scores 5.94 against D0's 1.72 dB on MIT-BIH: six
@@ -477,4 +500,27 @@ These were not tested.
   exceed the noiseless ceiling: EEG D1 3.72 against 3.24, sine D1 12.36 against 12.18. This is
   consistent with R3 §1.5 and R4b §2 (the noisy drive's min and max set the encoder range, which
   matters most on smooth signals), but it is not tested here.
+
+## 8. Break-even — which design is cheapest for a given chip
+
+This analysis is descriptive: it runs no test and uses committed counts. The script is
+`scripts/h1_hardware_cost/break_even.py`, with output in `analysis/break_even_{designs,targets,switches}.csv`.
+
+An event-driven chip spends energy per synaptic operation and per routed spike, and this project
+measures neither. Written in synaptic-operation equivalents, a design's event cost is
+`O + ρE`, where `ρ = E_spike / E_synop` is the one number a reader supplies for their own chip.
+
+- **Confirmation designs (MIT-BIH, noiseless).** D4 is cheaper than D5 whenever ρ < 2.00. D2 is
+  cheaper than D1 at every ρ. D4 is also cheaper than D0 when ρ < 0.738, though at a very
+  different fidelity.
+- **Cheapest design reaching a target, earlier landscape.** This uses pilot B's points and B2's,
+  on seeds 0–9 and 0–4. The confirmation designs are left out because they were scored on other
+  ECG windows. Exact switch points:
+  - ≥ 5 dB: `[2048,128]` with a 10 Hz encoder below ρ = 0.99; `[512,128]` at 20 Hz up to
+    ρ = 3.25; above that, R4b's `[128,128]` with K = 8 and its layer at 10 Hz.
+  - ≥ 4 dB: `[512,32]` at 20 Hz below ρ = 1.01; `[128,32]` at 40 Hz up to ρ = 15.4; above that,
+    `[128,128]` at 20 Hz.
+  - ≥ 5.5 dB: `[512,128]` at 40 Hz at every ρ.
+- **Clean input only.** With noise, the slow-encoder designs fall behind (§7.2), so the
+  break-even for a noisy input would sit lower.
 

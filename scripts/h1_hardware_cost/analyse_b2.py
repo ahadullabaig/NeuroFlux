@@ -12,6 +12,8 @@ Outputs, in `results/h1_hardware_cost/analysis/` (the figure in `figures/`):
   b2_tests.csv   P1, P2a, P2b, F1 and F2, one row per test
   b2_front.csv   the MIT-BIH fronts (synaptic operations, spikes) over pilot B's
                  points and B2's
+  b2_p2b_cells.csv  P2b per record and architecture: measured and predicted
+                 10 Hz ceiling
   b2_post_hoc.csv  the labelled post hoc section below
   b2_front.pdf
 
@@ -238,6 +240,7 @@ def inverse_excess(affine_db: float) -> float:
 def test_p2b(cells: dict[Cell, list[Row]]) -> Record:
     errors: list[float] = []
     signed: list[float] = []
+    per_cell: list[Record] = []
     excluded = 0
     for n_1 in b2_grid.LAYER_WIDTHS:
         for n_in in b2_grid.INPUT_WIDTHS:
@@ -258,6 +261,16 @@ def test_p2b(cells: dict[Cell, list[Row]]) -> Record:
                 predicted = excess_to_affine_db(linear_to_db(1.0 / y10))
                 signed.append(at[10.0][unit] - predicted)
                 errors.append(abs(signed[-1]))
+                per_cell.append(
+                    {
+                        "n_in": n_in,
+                        "n_1": n_1,
+                        "unit": unit,
+                        "measured_10hz_db": at[10.0][unit],
+                        "predicted_10hz_db": predicted,
+                        "error_db": signed[-1],
+                    }
+                )
     # np.median, not r3.median: an unbounded error must count, not be dropped.
     mae = float(np.median(errors)) if errors else math.nan
     record: Record = {
@@ -278,6 +291,7 @@ def test_p2b(cells: dict[Cell, list[Row]]) -> Record:
         f"{record['n_unbounded']} unbounded, {excluded} excluded -> "
         f"{record['verdict']}"
     )
+    r3.write("b2_p2b_cells.csv", per_cell)
     return record
 
 
