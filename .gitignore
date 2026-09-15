@@ -151,3 +151,5 @@ results/h1_hardware_cost/*.csv
 # ICEE 2026 paper build output
 paper/icee2026/build/
 paper/icee2026/build.log
+paper/mcsoc2027/build/
+paper/mcsoc2027/build.log

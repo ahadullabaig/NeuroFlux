@@ -1,0 +1,27 @@
+\begin{table}[t]
+\centering
+\caption{Precision and fault budget}
+\label{tab:devices}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Device level & Measured (dB) & Predicted (dB) & Equivalent \\
+\midrule
+1 bit & $-$0.22 to +0.03 & $-$0.51 to $-$0.16 & 9/9 \\
+2 bits & $-$0.05 to +0.02 & $-$0.07 to $-$0.02 & 9/9 \\
+3 bits & $-$0.01 to 0.00 & $-$0.01 to 0.00 & 9/9 \\
+4 bits & 0.00 to 0.00 & 0.00 to 0.00 & 9/9 \\
+$\sigma = 0.25$ & $-$0.06 to +0.02 & $-$0.05 to $-$0.01 & 9/9 \\
+$\sigma = 0.5$ & $-$0.15 to +0.01 & $-$0.17 to $-$0.05 & 9/9 \\
+$\sigma = 1$ & $-$0.29 to $-$0.06 & $-$0.50 to $-$0.15 & 9/9 \\
+$\sigma = 1.5$ & $-$0.45 to $-$0.21 & $-$0.80 to $-$0.26 & 5/9 \\
+25\% stuck & $-$0.15 to 0.00 & $-$0.35 to $-$0.10 & 9/9 \\
+50\% stuck & $-$0.42 to $-$0.09 & $-$0.79 to $-$0.27 & 8/9 \\
+75\% stuck & $-$0.69 to $-$0.29 & $-$1.53 to $-$0.61 & 2/9 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+\parbox{\columnwidth}{\scriptsize Change from exact weights, range over three pools and three encoder rates (9 points), each a median over 16 records; equivalent: TOST $\pm0.5$~dB. Predicted: effective fan-in model, fixed in advance.}
+\end{table}

@@ -1,0 +1,24 @@
+\begin{table*}[t]
+\centering
+\caption{The named designs, re-measured on unseen data}
+\label{tab:designs}
+\footnotesize
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}llcccccc rrrrr@{}}
+\toprule
+ & & & Enc. & Weight & \multicolumn{3}{c}{Ceiling (dB)} & \multicolumn{2}{c}{Event-driven} & \multicolumn{3}{c}{Static} \\
+\cmidrule(lr){6-8}\cmidrule(lr){9-10}\cmidrule(l){11-13}
+ & Network & Fan-in & (Hz) & bits & MIT-BIH & EEG & Sine & Synops & Spikes & Synapses & Memory & Clock \\
+\midrule
+D0 & $[32,16,8]$ & all & 40 & -- & 1.72 & 2.03 & 7.52 & 25.6 & 2.2 & 640 & 20.5 & 160 \\
+D1 & $[512,512]$ & 16 & 40 & -- & 6.08 & 3.24 & 12.18 & 327.7 & 30.8 & 8,192 & 335.9 & 2,048 \\
+D2 & $[512,128]$ & 8 & 40 & -- & 5.94 & 3.11 & 12.35 & 41.0 & 23.1 & 1,024 & 42.0 & 256 \\
+D3 & $[512,128]$ & 8 & 40 & 2 & 5.94 & 3.13 & 12.39 & 41.0 & 23.1 & 1,024 & 11.3 & 256 \\
+D4 & $[2048,128]$ & 8 & 10 & -- & 5.35 & 2.97 & 12.26 & 10.2 & 23.0 & 1,024 & 44.0 & 256 \\
+D5 & $[128,128]$ & 8 & 40 & -- & 5.44 & 3.06 & 11.87 & 41.0 & 7.7 & 1,024 & 39.9 & 256 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\scriptsize D2 minus D1 $-$0.23 [$-$0.45, +0.02]~dB; D3 minus D2 0.00 [$-$0.02, +0.01]; D4 minus D5 $-$0.06 [$-$0.12, +0.04]. Medians over 16 records (MIT-BIH) or 10 seeds, seeds 10--19, noiseless input. Synops and spikes: thousands per second, measured. Memory: kilobits of weights, at 32 bits unless quantized, plus an input address per synapse of a fixed-fan-in layer. Clock: thousands of synapse reads per second at 250 steps per second.}
+\end{table*}
