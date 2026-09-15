@@ -145,6 +145,9 @@ results/r4b_mechanism/*.csv
 # R5 raw grids, as for R3.
 results/r5_generality/*.csv
 
+# H1 raw grids, as for R3.
+results/h1_hardware_cost/*.csv
+
 # ICEE 2026 paper build output
 paper/icee2026/build/
 paper/icee2026/build.log
