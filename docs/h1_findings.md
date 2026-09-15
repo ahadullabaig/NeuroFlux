@@ -1,8 +1,8 @@
 # H1 — What the ceiling costs in hardware (MCSoC 2027)
 
 **Status:** pilot B and grid B2 complete. **The frame decision is met:** cost against fidelity
-is the MCSoC paper's frame (§3). Pilot A (a fidelity budget for weight quantization and device
-variation) has not started.
+is the MCSoC paper's frame (§3). Pilot A (weight precision and device faults) is designed and
+pre-registered but has not run (§5).
 **Why this stage exists:** the ICEE 2026 paper already claims the flat ceiling, the cascade law,
 the K = 8–16 fan-in rule and STDP's collapse of fan-in. The next paper goes to the NeuroCore
 summit at IEEE MCSoC 2027, an architecture venue whose reviewers will ask what a design point
@@ -297,3 +297,65 @@ buys down and a part it cannot.
   rule.
 - **Pilot A** joins the same budget. Weight quantization and device variation are further
   terms, and whether the law prices them too is the natural next test.
+
+## 5. Pilot A — design (not run)
+
+The rules are in the docstring of `scripts/h1_hardware_cost/pilot_a_grid.py`. The committed
+numeric predictions are in `results/h1_hardware_cost/analysis/pilot_a_prediction{s,_summary}.csv`,
+written by `pilot_a_predictions.py` before any grid row exists.
+
+**Question.** B2 split the output noise into an encoder counting term and a remainder. A neuron
+averages counting noise over its effective fan-in, `PR = (Σw)²/Σw²`, which R4b found tracks a
+layer's noise. Weight quantization, lognormal device-to-device variation and open
+(stuck-at-zero) devices all lower PR by amounts computable from the weight matrices alone. If the
+budget is right, each one raises the counting term by `PR_exact / PR_level` and leaves the
+remainder untouched: a zero-parameter prediction.
+
+**Design.**
+- **Networks:** the three `N_1` = 128 networks from B2, `[128,128]`, `[512,128]` and
+  `[2048,128]`, with K = 8 and the layer at 20 Hz.
+- **Encoder:** 10, 20 or 40 Hz.
+- **Device levels, one non-ideality at a time:** exact; 1, 2, 3 or 4 bits; σ = 0.25, 0.5, 1.0
+  or 1.5; 25%, 50% or 75% of devices stuck at zero.
+- **Size:** 16 records × 5 seeds, 108 design points, 8,640 runs, about 30 min.
+- **Code:** `Spec` gains `weight_bits`, `weight_sigma` and `weight_stuck`, applied to every
+  weight matrix before calibration by `r3_common.perturb_weights`. The default path is
+  unchanged: B2's `[128,128]` run still gives 3.292972653768322 dB, and existing spec keys do
+  not change.
+
+| test | prediction |
+|---|---|
+| PA1, precision budget | the fewest bits equivalent to exact weights (TOST ±0.5 dB) is ≤ 2 at all 9 network × rate points |
+| PA2, variation budget | the largest σ equivalent to exact is ≥ 0.5 at all 9 |
+| PA3, the budget prices the faults | median \|error\| ≤ 0.3 dB over all 99 perturbed points × 16 records, **and** better than a no-change model on the 22 points predicted to lose ≥ 0.5 dB |
+| PA4, is PR the whole story | the matched-PR pairs 50% stuck vs σ 1.5 and 1 bit vs σ 1.0, whose spread of summed weight differs 2–3×, are equivalent at all 9 points |
+
+The largest predicted losses, as medians over records:
+- 75% stuck: −1.19 to −1.53 dB at `[128,128]` and −0.61 to −1.34 dB at `[2048,128]`;
+- 50% stuck and σ 1.5: −0.57 to −0.79 dB at `[128,128]`;
+- 1 bit: −0.16 to −0.51 dB;
+- 2 bits and σ ≤ 0.5: ≤ 0.17 dB.
+
+The model predicts that a wide pool and a fast encoder protect against device faults, because
+both shrink the counting term that faults inflate.
+
+**Reading rule.**
+- **PA3 supported:** the paper's budget prices encoder rate, input pool, weight precision and
+  device faults with one model.
+- **PA3 not supported:** PA1 and PA2 still give an empirical precision and fault table, and the
+  model claim stays with the encoder.
+- **Either way:** weight memory (bits × synapses) becomes a cost axis.
+
+**Disclosure.** After the levels and predictions were fixed, the code was smoke-tested once per
+non-ideality (record 100, seed 0, `[128,128]`, 40 Hz). All three lost less than the model
+predicts: −0.07 dB at 1 bit, −0.13 at σ 1.5 and −0.06 at 50% stuck, against medians of −0.34,
+−0.57 and −0.57. These are three runs out of 8,640 and nothing was changed after them, but they
+point to PA3's second condition as the one at risk.
+
+**Not covered.**
+- **Cycle-to-cycle read noise:** a fresh weight error at every synaptic event needs a change to
+  the Numba synapse kernel.
+- **Event loss in the interconnect:** dropping each input spike with probability p is Poisson
+  thinning, which B2's encoder-rate cells already price as a rate of `r_0(1 − p)`.
+- **Faults and quantization together.**
+
