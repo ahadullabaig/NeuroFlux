@@ -1,8 +1,9 @@
 # H1 — What the ceiling costs in hardware (MCSoC 2027)
 
 **Status:** pilot B and grid B2 complete. **The frame decision is met:** cost against fidelity
-is the MCSoC paper's frame (§3). Pilot A (weight precision and device faults) is designed and
-pre-registered but has not run (§5).
+is the MCSoC paper's frame (§3). Pilot A (weight precision and device faults) is complete (§5–§6):
+the hardware tolerates 1-bit weights and heavy device variation, but the budget model overstates
+fault losses, so the model's claim stays with encoder rate and input pool.
 **Why this stage exists:** the ICEE 2026 paper already claims the flat ceiling, the cascade law,
 the K = 8–16 fan-in rule and STDP's collapse of fan-in. The next paper goes to the NeuroCore
 summit at IEEE MCSoC 2027, an architecture venue whose reviewers will ask what a design point
@@ -298,7 +299,7 @@ buys down and a part it cannot.
 - **Pilot A** joins the same budget. Weight quantization and device variation are further
   terms, and whether the law prices them too is the natural next test.
 
-## 5. Pilot A — design (not run)
+## 5. Pilot A — design
 
 The rules are in the docstring of `scripts/h1_hardware_cost/pilot_a_grid.py`. The committed
 numeric predictions are in `results/h1_hardware_cost/analysis/pilot_a_prediction{s,_summary}.csv`,
@@ -358,4 +359,59 @@ point to PA3's second condition as the one at risk.
 - **Event loss in the interconnect:** dropping each input spike with probability p is Poisson
   thinning, which B2's encoder-rate cells already price as a rate of `r_0(1 − p)`.
 - **Faults and quantization together.**
+
+## 6. Pilot A — results
+
+- **Grid.** `results/h1_hardware_cost/pilot_a_grid.csv.gz`: 8,640 runs, 0 failures, every run
+  `ok`. All 720 exact-weight runs reproduce B2 exactly.
+- **Analysis.** `scripts/h1_hardware_cost/analyse_pilot_a.py`, written while the grid ran. It
+  reads the committed predictions rather than recomputing them.
+- **Outputs.** `analysis/pilot_a_{cells,tests}.csv` and `figures/pilot_a.pdf`.
+
+### 6.1 Pre-registered tests
+
+| test | result | verdict |
+|---|---|---|
+| PA1, precision budget | the fewest bits equivalent to exact is **1 bit at all 9 points**. 1 bit costs −0.22 to +0.03 dB, 2 bits −0.05 to +0.02, and 3–4 bits stay within 0.01 | **supported** |
+| PA2, variation budget | the largest equivalent σ is 1.5 at 5 points and 1.0 at 4 (`[512,128]` and `[2048,128]` at 20 and 40 Hz). σ ≤ 0.5 costs at most 0.15 dB; σ = 1.5 costs 0.21–0.45 | **supported** |
+| PA3, the budget prices the faults | (i) median \|error\| 0.093 dB over 1,584 values, **met**. (ii) on the 22 points predicted to lose ≥ 0.5 dB, the model's median \|error\| is 0.46 dB against 0.37 dB for no-change, **not met** | **not supported** |
+| PA4, is PR the whole story | all 18 matched-PR pairs are equivalent, with differences within ±0.31 dB | **supported** |
+
+**Stuck-at-zero devices** cost at most 0.15 dB at 25%, at most 0.42 dB at 50%, and 0.29–0.69 dB
+at 75%. Only 12 of the 99 perturbed points are not equivalent to exact weights: 75% stuck at 7
+points, σ 1.5 at 4, and 50% stuck at 1.
+
+### 6.2 What the model got right and wrong
+
+This analysis is post hoc and descriptive.
+
+- **It ranks the losses.** Across the 99 perturbed points, predicted and measured change have
+  Spearman ρ = 0.81 (p = 10⁻²⁴). PA4 shows that effective fan-in, not the spread of each
+  neuron's summed weight, organises them.
+- **It overstates their size.** Measured losses are 0.44× the predicted ones (slope through the
+  origin): 0.28× at `[128,128]`, 0.52× at `[512,128]` and 0.64× at `[2048,128]`.
+- **It has the pool direction wrong.** It predicted that a wide pool protects against faults,
+  but wide pools lose more. With 75% of devices stuck and a 40 Hz encoder, the loss is 0.29 dB
+  at `[128,128]`, 0.44 at `[512,128]` and 0.49 at `[2048,128]`.
+- **The encoder direction holds.** For 75% stuck, a 40 Hz encoder loses less than a 10 Hz one
+  at every pool.
+- **A reading, not tested:** in a narrow pool, faults also cut the overlap between neurons'
+  inputs. That is M4's decorrelation gain, and it offsets part of the fan-in loss. A 2048-channel
+  pool has almost no overlap left to lose, which is where the PR-only model comes closest. Either
+  way, the remainder `Λ_rest` is not untouched by faults, and PA3 assumed it was.
+- **1-bit weights are unexplained.** They cost nothing with a 10 Hz encoder (−0.02 to +0.03 dB)
+  and 0.03–0.22 dB at 20–40 Hz, the reverse of the model's ordering.
+
+### 6.3 What pilot A does to the paper
+
+By the reading rule, PA3 failed. The budget model's claim stays with encoder rate and input pool
+(B2), and pilot A enters the paper as an empirical precision and fault table.
+
+- **Weight memory is cheap.** In every fixed-fan-in design tested, 1 bit per synapse costs
+  ≤ 0.22 dB and 2 bits ≤ 0.05 dB. `[512,128]` with K = 8 at 2 bits needs 2,048 bits of weight
+  storage, plus a 9-bit address per synapse.
+- **Wide pools stay ahead under faults** even though they lose more. With 75% of devices open
+  and a 40 Hz encoder, `[2048,128]` keeps 5.19 dB against 4.84 dB at `[128,128]`.
+- **A limitation the paper must state if it uses the budget:** effective fan-in ranks device
+  losses, but the budget overstates them by about 2×, most in narrow pools.
 
