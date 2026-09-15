@@ -1,0 +1,5 @@
+analysis,group,n_points,spearman,slope_through_origin
+measured on predicted change (post hoc),all,99,0.8139641311069883,0.43690413548480195
+measured on predicted change (post hoc),N_in = 128,33,0.9107620320855615,0.2782859980679807
+measured on predicted change (post hoc),N_in = 512,33,0.8649732620320856,0.5161096179499792
+measured on predicted change (post hoc),N_in = 2048,33,0.8328877005347594,0.6350644658270627

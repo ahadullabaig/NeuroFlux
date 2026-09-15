@@ -8,7 +8,13 @@ signals, SNR averages a unit's `ok` runs, paired tests pair units, TOST at
 pilot B (`pilot_b_cost.run_costs`).
 
 Outputs, in `results/h1_hardware_cost/analysis/`:
-  confirm_cells.csv   one row per signal x input x design: ceiling and costs
+  confirm_cells.csv   one row per signal x input x design: output SNR (the
+                      ceiling at noiseless input), measured event costs, and the
+                      design's static costs: weight memory, counted at 32 bits
+                      for exact weights with an input address per synapse of a
+                      fixed-fan-in layer (dense layers need none), and the
+                      synapse reads and neuron updates a clock-driven chip
+                      makes at 250 steps per second
   confirm_tests.csv   C1-C5, G1
 
 Usage:
@@ -30,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analyse_r3 as r3  # noqa: E402
 import confirm_grid as grid  # noqa: E402
 import pilot_b_cost as pilot  # noqa: E402
+from r3_common import DT  # noqa: E402
 
 NON_INFERIORITY_DB = -0.5
 NOISELESS = "inf"
@@ -93,6 +100,29 @@ def costs(cells: dict[Cell, list[Row]], cell: Cell) -> dict[str, float]:
     metrics = ("synapses", "synops_per_s", "spikes_per_s")
     return {
         m: r3.median(float(np.mean(v[m])) for v in per_unit.values()) for m in metrics
+    }
+
+
+EXACT_WEIGHT_BITS = 32
+
+
+def static_costs(name: str) -> dict[str, float]:
+    """Weight memory and clock-driven work, from the design alone."""
+    layers, _, _, fan_in, bits = grid.DESIGNS[name]
+    steps_per_s = 1000.0 / DT
+    weight_bits = bits if bits is not None else EXACT_WEIGHT_BITS
+    memory = 0
+    synapses = 0
+    for k in range(1, len(layers)):
+        sparse = k == 1 and fan_in is not None
+        count = (fan_in if sparse else layers[k - 1]) * layers[k]  # type: ignore[operator]
+        synapses += count
+        address = math.ceil(math.log2(layers[k - 1])) if sparse else 0
+        memory += count * (weight_bits + address)
+    return {
+        "weight_memory_bits": float(memory),
+        "clock_synapse_reads_per_s": synapses * steps_per_s,
+        "clock_neuron_updates_per_s": sum(layers[1:]) * steps_per_s,
     }
 
 
@@ -208,6 +238,7 @@ def main() -> None:
                         "design": name,
                         "ceiling_db": value,
                         **cell_cost,
+                        **static_costs(name),
                         "ok_fraction": ok_frac,
                         "n_units": len(ceilings(cells, cell)),
                     }

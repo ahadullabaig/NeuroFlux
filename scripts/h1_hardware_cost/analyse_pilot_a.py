@@ -11,6 +11,9 @@ Outputs, in `results/h1_hardware_cost/analysis/`:
   pilot_a_cells.csv   one row per design point: ceiling, change from exact
                       weights (paired), predicted change, ok fraction
   pilot_a_tests.csv   the check, PA1-PA4
+  pilot_a_post_hoc.csv  post hoc, descriptive: rank correlation and slope of
+                      measured on predicted change over the 99 perturbed points,
+                      overall and per pool
   ../figures/pilot_a.pdf
 
 Usage:
@@ -466,7 +469,37 @@ def main() -> None:
             if r["n_in"] == n_in and r["encoder_hz"] == hz and r["level"] != "exact"
         )
         print(f"  {fmt_point(n_in, hz)}: {line}")
+    post_hoc(records)
     figure(records)
+
+
+def post_hoc(records: list[Record]) -> None:
+    """Designed after PA3 was read: how the committed predictions miss."""
+    from scipy import stats  # type: ignore[import-untyped]
+
+    rows: list[Record] = []
+    perturbed = [r for r in records if r["level"] != "exact"]
+    groups: list[tuple[str, list[Record]]] = [("all", perturbed)] + [
+        (f"N_in = {n}", [r for r in perturbed if r["n_in"] == n])
+        for n in grid.INPUT_WIDTHS
+    ]
+    for name, group in groups:
+        x = np.array([r["predicted_change_db"] for r in group])
+        y = np.array([r["change_db"] for r in group])
+        rows.append(
+            {
+                "analysis": "measured on predicted change (post hoc)",
+                "group": name,
+                "n_points": len(group),
+                "spearman": float(stats.spearmanr(x, y).statistic),
+                "slope_through_origin": float(x @ y / (x @ x)),
+            }
+        )
+        print(
+            f"  post hoc {name}: Spearman {rows[-1]['spearman']:.2f}, "
+            f"slope {rows[-1]['slope_through_origin']:.2f}"
+        )
+    r3.write("pilot_a_post_hoc.csv", rows)
 
 
 if __name__ == "__main__":
