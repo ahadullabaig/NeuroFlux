@@ -119,7 +119,16 @@ OPERATING_POINTS: tuple[str, ...] = ("shipped", "controlled")
 
 
 _LATE_FIELDS: frozenset[str] = frozenset(
-    {"calibrate_at_snr_db", "encoder_range", "fan_in", "encoder", "readouts"}
+    {
+        "calibrate_at_snr_db",
+        "encoder_range",
+        "fan_in",
+        "encoder",
+        "readouts",
+        "weight_bits",
+        "weight_sigma",
+        "weight_stuck",
+    }
 )
 
 # Encoders (R5). Every R3 and R4b grid used Poisson, the default.
@@ -198,6 +207,11 @@ class Spec:
     # R5: see READOUT_KINDS. When set, replaces `decoder_taus`; None reads the
     # output with a population decoder at each of `decoder_taus`.
     readouts: tuple[tuple[str, float], ...] | None = None
+    # H1: device non-idealities applied to every weight matrix once it is built
+    # and before calibration; see `perturb_weights`. None leaves weights exact.
+    weight_bits: int | None = None
+    weight_sigma: float | None = None
+    weight_stuck: float | None = None
 
     def key(self) -> str:
         """
@@ -489,6 +503,53 @@ def fixed_fan_in_weights(
     return weights
 
 
+def perturb_weights(
+    weights: np.ndarray,
+    seed: int,
+    layer: int,
+    bits: int | None = None,
+    sigma: float | None = None,
+    stuck: float | None = None,
+) -> np.ndarray:
+    """
+    A weight matrix as a non-ideal device array would realise it (H1 pilot A).
+
+    Applied in the order an array imposes them. `bits` quantizes to `2**bits`
+    evenly spaced levels on `[0, max(w)]`, the matrix's own range, as
+    programming maps it. `sigma` multiplies each weight by `exp(sigma * z)`,
+    `z ~ N(0, 1)`: lognormal device-to-device variation. `stuck` sets each
+    weight to zero with that probability: an open device. Zeros stay zero, so
+    a fixed fan-in keeps its mask.
+
+    The variation and fault draws have their own streams, fixed by `seed` and
+    `layer` and drawn whatever the level, so successive levels perturb the same
+    devices and paired comparisons across levels are paired by device too.
+    """
+    if bits is not None and bits < 1:
+        raise ValueError(f"bits must be at least 1, got {bits}")
+    if sigma is not None and sigma < 0.0:
+        raise ValueError(f"sigma must be non-negative, got {sigma}")
+    if stuck is not None and not 0.0 <= stuck < 1.0:
+        raise ValueError(f"stuck must be in [0, 1), got {stuck}")
+    out = np.asarray(weights, dtype=np.float64).copy()
+    if bits is not None:
+        top = float(out.max())
+        if top > 0.0:
+            levels = 2**bits - 1
+            out = np.round(out / top * levels) / levels * top
+    if sigma is not None:
+        z = np.random.default_rng(
+            np.random.SeedSequence([seed, 40_000, layer])
+        ).standard_normal(out.shape)
+        out = out * np.exp(sigma * z)
+    if stuck is not None:
+        u = np.random.default_rng(np.random.SeedSequence([seed, 50_000, layer])).random(
+            out.shape
+        )
+        out = np.where(u < stuck, 0.0, out)
+    return out.astype(np.float32)
+
+
 def _calibration_spikes(
     encoder: BaseEncoder, drive: np.ndarray, seconds: float
 ) -> np.ndarray:
@@ -631,6 +692,22 @@ def run_spec(
         first.weights = weights.copy()
         # `reset_state` restores from this copy, so it must carry the new matrix.
         first.initial_weights_copy = weights.copy()
+    if (
+        spec.weight_bits is not None
+        or spec.weight_sigma is not None
+        or spec.weight_stuck is not None
+    ):
+        for layer, synapse in enumerate(net.synapses):
+            realised = perturb_weights(
+                synapse.weights,
+                spec.seed,
+                layer,
+                bits=spec.weight_bits,
+                sigma=spec.weight_sigma,
+                stuck=spec.weight_stuck,
+            )
+            synapse.weights = realised.copy()
+            synapse.initial_weights_copy = realised.copy()
 
     def new_encoder(rng: np.random.Generator) -> BaseEncoder:
         return _make_encoder(
