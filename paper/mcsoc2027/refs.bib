@@ -1,0 +1,214 @@
+% Reading status. The project rule: no citation goes in the submitted manuscript
+% that an author has not opened and read.
+%   [read for ICEE]   read and checked for the ICEE 2026 paper
+%   [MUST READ]       added for this paper from verified metadata (Crossref);
+%                     an author must read it and confirm the cited statement
+%                     before submission, or the citation comes out.
+
+% [read for ICEE] -- our own paper. Update after the ICEE decision (14 Oct 2026):
+% "to appear" if accepted; if rejected, drop it and state the needed background
+% directly.
+@unpublished{baig2026icee,
+  author = {Baig, Ahad Ulla and Gera, Divisha and G, Charithra},
+  title  = {Feed-Forward Spiking Networks Obey a {Friis}-Type Cascade Law: Fidelity Ceilings and a Fan-In Design Rule for Biosignal Processing},
+  note   = {Submitted to IEEE Int. Conf. Emerging Electronics (ICEE), 2026},
+  year   = {2026}
+}
+
+% [read for ICEE]
+@article{davies2018loihi,
+  author  = {Davies, Mike and Srinivasa, Narayan and Lin, Tsung-Han and Chinya, Gautham and Cao, Yongqiang and Choday, Sri Harsha and others},
+  title   = {Loihi: A Neuromorphic Manycore Processor with On-Chip Learning},
+  journal = {IEEE Micro},
+  volume  = {38},
+  number  = {1},
+  pages   = {82--99},
+  year    = {2018},
+  doi     = {10.1109/MM.2018.112130359}
+}
+
+% [MUST READ] cited for: sparsity (static and dynamic) as the lever SNN hardware
+% efficiency depends on
+@inproceedings{aliyev2024sparsity,
+  author    = {Aliyev, Ilkin and Svoboda, Kama and Adegbija, Tosiron and Fellous, Jean-Marc},
+  title     = {Sparsity-Aware Hardware-Software Co-Design of Spiking Neural Networks: An Overview},
+  booktitle = {Proc. IEEE 17th Int. Symp. Embedded Multicore/Many-core Systems-on-Chip (MCSoC)},
+  pages     = {413--420},
+  year      = {2024},
+  doi       = {10.1109/MCSoC64144.2024.00074}
+}
+
+% [MUST READ] cited for: synaptic operations as the energy proxy for SNNs on
+% neuromorphic hardware
+@article{sorbaro2020energy,
+  author  = {Sorbaro, Martino and Liu, Qian and Bortone, Massimo and Sheik, Sadique},
+  title   = {Optimizing the Energy Consumption of Spiking Neural Networks for Neuromorphic Applications},
+  journal = {Front. Neurosci.},
+  volume  = {14},
+  pages   = {662},
+  year    = {2020},
+  doi     = {10.3389/fnins.2020.00662}
+}
+
+% [MUST READ] cited for: data movement in SNN memory hierarchies as a cost
+@inproceedings{chee2025profiling,
+  author    = {Chee, Isaac and Hari, Subrahmanian and Harnoor, Kaustubh and Josephson, Colleen and Eshraghian, Jason K.},
+  title     = {Profiling Data Movement in {SNN} Memory Hierarchies},
+  booktitle = {Proc. IEEE 18th Int. Symp. Embedded Multicore/Many-core Systems-on-Chip (MCSoC)},
+  pages     = {368--371},
+  year      = {2025},
+  doi       = {10.1109/MCSoC67473.2025.00065}
+}
+
+% [MUST READ] cited for: address-event representation, spikes sent as
+% log2(N)-bit address packets
+@article{boahen2000aer,
+  author  = {Boahen, Kwabena A.},
+  title   = {Point-to-Point Connectivity Between Neuromorphic Chips Using Address Events},
+  journal = {IEEE Trans. Circuits Syst. II},
+  volume  = {47},
+  number  = {5},
+  pages   = {416--434},
+  year    = {2000},
+  doi     = {10.1109/82.842110}
+}
+
+% [MUST READ] cited for: reducing address-event traffic by lossy compression
+@inproceedings{ganesh2025fspc,
+  author    = {Ganesh, Satvik and Yuga, Hanyu and Wang, Zhishang and Dang, Khanh N.},
+  title     = {{FSPC}: A Lossy Spike Compression Through Correlated-{AER} Merging in Spiking Neural Networks},
+  booktitle = {Proc. IEEE 18th Int. Symp. Embedded Multicore/Many-core Systems-on-Chip (MCSoC)},
+  pages     = {386--393},
+  year      = {2025},
+  doi       = {10.1109/MCSoC67473.2025.00068}
+}
+
+% [MUST READ] cited for: spike encoding of MIT-BIH ECG for beat classification
+% (a classification task, not reconstruction)
+@inproceedings{sulistiyanto2025ecg,
+  author    = {Sulistiyanto, Nanang and Setyawan, Raden Arief and Harilegawa, Made Wena},
+  title     = {A Direct Spike Encoding for a Lightweight Neural Network Based {ECG} Classification},
+  booktitle = {Proc. IEEE 18th Int. Symp. Embedded Multicore/Many-core Systems-on-Chip (MCSoC)},
+  pages     = {121--124},
+  year      = {2025},
+  doi       = {10.1109/MCSoC67473.2025.00028}
+}
+
+% [MUST READ] cited for: variation in emerging nonvolatile synaptic devices
+@article{yu2018nvm,
+  author  = {Yu, Shimeng},
+  title   = {Neuro-Inspired Computing With Emerging Nonvolatile Memorys},
+  journal = {Proc. IEEE},
+  volume  = {106},
+  number  = {2},
+  pages   = {260--285},
+  year    = {2018},
+  doi     = {10.1109/JPROC.2018.2790840}
+}
+
+% [MUST READ] cited for: resistance variation and stuck-at faults in RRAM
+% crossbars degrade network accuracy
+@inproceedings{chen2017rram,
+  author    = {Chen, Lerong and Li, Jiawen and Chen, Yiran and Deng, Qiuping and Shen, Jiyuan and Liang, Xiaoyao and Jiang, Li},
+  title     = {Accelerator-Friendly Neural-Network Training: Learning Variations and Defects in {RRAM} Crossbar},
+  booktitle = {Proc. Design, Automation \& Test in Europe (DATE)},
+  pages     = {19--24},
+  year      = {2017},
+  doi       = {10.23919/DATE.2017.7926952}
+}
+
+% [read for ICEE] cited for: signed weights from differential device pairs
+@article{prezioso2015training,
+  author  = {Prezioso, M. and Merrikh-Bayat, F. and Hoskins, B. D. and Adam, G. C. and Likharev, K. K. and Strukov, D. B.},
+  title   = {Training and Operation of an Integrated Neuromorphic Network Based on Metal-Oxide Memristors},
+  journal = {Nature},
+  volume  = {521},
+  number  = {7550},
+  pages   = {61--64},
+  year    = {2015}
+}
+
+% [MUST READ] cited for: weight quantization of STDP-trained SNNs for energy
+@article{rathi2019stdp,
+  author  = {Rathi, Nitin and Panda, Priyadarshini and Roy, Kaushik},
+  title   = {{STDP}-Based Pruning of Connections and Weight Quantization in Spiking Neural Networks for Energy-Efficient Recognition},
+  journal = {IEEE Trans. Comput.-Aided Des. Integr. Circuits Syst.},
+  volume  = {38},
+  number  = {4},
+  pages   = {668--677},
+  year    = {2019},
+  doi     = {10.1109/TCAD.2018.2819366}
+}
+
+% [MUST READ] cited for: a framework for quantizing SNN weights
+@inproceedings{putra2021qspinn,
+  author    = {Putra, Rachmad Vidya Wicaksana and Shafique, Muhammad},
+  title     = {{Q-SpiNN}: A Framework for Quantizing Spiking Neural Networks},
+  booktitle = {Proc. Int. Joint Conf. Neural Netw. (IJCNN)},
+  pages     = {1--8},
+  year      = {2021},
+  doi       = {10.1109/IJCNN52387.2021.9534087}
+}
+
+% [read for ICEE]
+@article{friis1944noise,
+  author  = {Friis, Harald T.},
+  title   = {Noise Figures of Radio Receivers},
+  journal = {Proc. IRE},
+  volume  = {32},
+  number  = {7},
+  pages   = {419--422},
+  year    = {1944}
+}
+
+% [read for ICEE]
+@inproceedings{diehl2015balancing,
+  author    = {Diehl, Peter U. and Neil, Daniel and Binas, Jonathan and Cook, Matthew and Liu, Shih-Chii and Pfeiffer, Michael},
+  title     = {Fast-Classifying, High-Accuracy Spiking Deep Networks Through Weight and Threshold Balancing},
+  booktitle = {Proc. Int. Joint Conf. Neural Netw. (IJCNN)},
+  year      = {2015},
+  doi       = {10.1109/IJCNN.2015.7280696}
+}
+
+% [read for ICEE]
+@article{rueckauer2017conversion,
+  author  = {Rueckauer, Bodo and Lungu, Iulia-Alexandra and Hu, Yuhuang and Pfeiffer, Michael and Liu, Shih-Chii},
+  title   = {Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification},
+  journal = {Front. Neurosci.},
+  volume  = {11},
+  pages   = {682},
+  year    = {2017}
+}
+
+% [read for ICEE] cited for: shared noise limits population information
+@article{morenobote2014information,
+  author  = {Moreno-Bote, Rub{\'e}n and Beck, Jeffrey and Kanitscheider, Ingmar and Pitkow, Xaq and Latham, Peter and Pouget, Alexandre},
+  title   = {Information-Limiting Correlations},
+  journal = {Nat. Neurosci.},
+  volume  = {17},
+  number  = {10},
+  pages   = {1410--1417},
+  year    = {2014}
+}
+
+% [read for ICEE] PhysioNet's terms ask users of MIT-BIH to cite this
+@article{moody2001impact,
+  author  = {Moody, George B. and Mark, Roger G.},
+  title   = {The Impact of the {MIT-BIH} Arrhythmia Database},
+  journal = {IEEE Eng. Med. Biol. Mag.},
+  volume  = {20},
+  number  = {3},
+  pages   = {45--50},
+  year    = {2001}
+}
+
+% [read for ICEE] PhysioNet's terms ask users to cite this
+@article{goldberger2000physionet,
+  author  = {Goldberger, Ary L. and Amaral, Luis A. N. and Glass, Leon and Hausdorff, Jeffrey M. and Ivanov, Plamen Ch. and Mark, Roger G. and Mietus, Joseph E. and Moody, George B. and Peng, Chung-Kang and Stanley, H. Eugene},
+  title   = {{PhysioBank}, {PhysioToolkit}, and {PhysioNet}: Components of a New Research Resource for Complex Physiologic Signals},
+  journal = {Circulation},
+  volume  = {101},
+  number  = {23},
+  pages   = {e215--e220},
+  year    = {2000}
+}
