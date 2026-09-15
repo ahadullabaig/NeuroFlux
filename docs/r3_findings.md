@@ -564,7 +564,8 @@ reported as usable ranges, because its silent region has two edges.
 
 ### 3.2 The output-rate axis
 
-**Grid** (`results/r3_characterisation/c3_rate.csv`, 13,260 runs, 0 failures, every run `ok`):
+**Grid** (`results/r3_characterisation/c3_rate.csv`, 13,260 runs, 0 failures; 19 runs are `silent`, all
+with every layer held at 0.25 Hz, and every other run is `ok`):
 rate-controlled, untrained; encoder at 40 Hz; the output layer held at 0.25–80 Hz with the
 hidden layer at 40 Hz (`output`), or every layer held at the same rate (`all`); `[32,16,8]`
 and, for `output`, `[32,16,64]`; MIT-BIH (16 records) and synthetic ECG (10 seeds); noiseless,
