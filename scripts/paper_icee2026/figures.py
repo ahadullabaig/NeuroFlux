@@ -436,12 +436,19 @@ def change_cell(row: dict[str, str]) -> str:
     return text
 
 
-def ceiling_cell(row: dict[str, str], dagger: bool = False) -> str:
-    mark = "$^{\\mathrm{a}}$" if dagger else ""
+def ceiling_cell(row: dict[str, str]) -> str:
     return (
         f"${fnum(row['reference_median']):.2f}\\,{{\\to}}\\,"
-        f"{fnum(row['level_median']):.2f}${mark}"
+        f"{fnum(row['level_median']):.2f}$"
     )
+
+
+# Reviewer 2 (camera-ready): the rows are compared against four different
+# reference networks, so each row names its own. Defined in the table notes.
+REF_DEFAULT = "A"  # untrained [32,16,8], every layer at 40 Hz, causal
+REF_COMPENSATED = "B"  # A's best Poisson readout, delay-compensated
+REF_WIDE_OUTPUT = "C"  # A with 64 output neurons
+REF_DENSE_ONE_LAYER = "D"  # dense one-layer [512,512] at its best rate
 
 
 def table_1() -> None:
@@ -515,19 +522,26 @@ def table_1() -> None:
             raise SystemExit(f"Table I: not significantly higher: {row}")
 
     tau_ms = int(fnum(best_tau["level"]))
-    groups: list[tuple[str, list[tuple[str, str, str]]]] = [
+    groups: list[tuple[str, list[tuple[str, str, str, str]]]] = [
         (
             "Does not raise it",
             [
-                ("Output width, 8 to 64", ceiling_cell(width), change_cell(width)),
+                (
+                    "Output width, 8 to 64",
+                    REF_DEFAULT,
+                    ceiling_cell(width),
+                    change_cell(width),
+                ),
                 (
                     f"Readout $\\tau$, 20 to {tau_ms}~ms (best)",
+                    REF_DEFAULT,
                     ceiling_cell(best_tau),
                     change_cell(best_tau),
                 ),
                 (
                     "Time-to-first-spike code",
-                    ceiling_cell(temporal, dagger=True),
+                    REF_COMPENSATED,
+                    ceiling_cell(temporal),
                     change_cell(temporal),
                 ),
             ],
@@ -537,22 +551,26 @@ def table_1() -> None:
             [
                 (
                     "STDP, 10 epochs",
+                    REF_DEFAULT,
                     ceiling_cell(lowers[0]),
                     change_cell(lowers[0]),
                 ),
                 (
                     "STDP, 200 epochs",
+                    REF_DEFAULT,
                     ceiling_cell(lowers[1]),
                     change_cell(lowers[1]),
                 ),
                 (
                     "Depth, 3 to 4 layers",
+                    REF_DEFAULT,
                     ceiling_cell(lowers[2]),
                     change_cell(lowers[2]),
                 ),
                 (
                     "Delta code",
-                    ceiling_cell(delta, dagger=True),
+                    REF_COMPENSATED,
+                    ceiling_cell(delta),
                     change_cell(delta),
                 ),
             ],
@@ -562,16 +580,19 @@ def table_1() -> None:
             [
                 (
                     "Depth, 3 to 2 layers",
+                    REF_DEFAULT,
                     ceiling_cell(raises[0]),
                     change_cell(raises[0]),
                 ),
                 (
-                    "Output rate, 40 to 5~Hz$^{\\mathrm{b}}$",
+                    "Output rate, 40 to 5~Hz",
+                    REF_WIDE_OUTPUT,
                     ceiling_cell(sparse_output),
                     change_cell(sparse_output),
                 ),
                 (
-                    f"Fan-in, all to {fan['fan_in']}$^{{\\mathrm{{c}}}}$",
+                    f"Fan-in, all to {fan['fan_in']}",
+                    REF_DENSE_ONE_LAYER,
                     ceiling_cell(fan),
                     change_cell(fan),
                 ),
@@ -587,26 +608,25 @@ def table_1() -> None:
         "\\label{tab:levers}",
         "\\scriptsize",
         "\\setlength{\\tabcolsep}{3pt}",
-        "\\begin{tabular}{@{}lll@{}}",
+        "\\begin{tabular}{@{}lcll@{}}",
         "\\toprule",
-        "Manipulation & Ceiling (dB) & Change (dB) [95\\% CI] \\\\",
+        "Manipulation & Ref. & Ceiling (dB) & Change (dB) [95\\% CI] \\\\",
     ]
     for heading, rows in groups:
         lines += [
             "\\midrule",
-            f"\\multicolumn{{3}}{{@{{}}l}}{{\\emph{{{heading}}}}} \\\\",
+            f"\\multicolumn{{4}}{{@{{}}l}}{{\\emph{{{heading}}}}} \\\\",
         ]
-        lines += [f"{a} & {b} & {c} \\\\" for a, b, c in rows]
+        lines += [f"{a} & {r} & {b} & {c} \\\\" for a, r, b, c in rows]
     notes = (
-        "Noiseless-input output SNR, median over 16 records; change is the "
-        "paired median with a BCa interval. Reference: untrained $[32,16,8]$, "
-        "every layer at 40~Hz, Poisson code, 20~ms exponential readout; "
+        "Noiseless-input output SNR, median over 16 records, from the reference "
+        "network to the manipulated one; change is the paired median with a BCa "
+        "interval. Ref.: A, untrained $[32,16,8]$, every layer at 40~Hz, Poisson "
+        "code, 20~ms exponential readout, causal; B, A with its best Poisson "
+        "readout, delay-compensated like the row (output advanced by its best lag "
+        "in 0--64~ms); C, A with 64 output neurons; D, a dense one-layer "
+        "$[512,512]$ network, both D and the row at their best rate (20~Hz). "
         "STDP rows hold rates. "
-        "$^{\\mathrm{a}}$Delay-compensated SNR against the best Poisson readout "
-        "(output advanced by its best lag in 0--64~ms). "
-        "$^{\\mathrm{b}}$64 output neurons. "
-        "$^{\\mathrm{c}}$One-layer $[512,512]$ network, both at their best rate "
-        "(20~Hz). "
         "Bold: significant (Wilcoxon signed-rank test, Holm correction within each "
         "family). "
         "$\\equiv$: equivalent within $\\pm 0.5$~dB (two one-sided tests)."
