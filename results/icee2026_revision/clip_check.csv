@@ -1,0 +1,5 @@
+signal,n_runs,measured_db,with_clip_db,without_clip_db
+mit-bih,160,3.86441,3.90941,3.91661
+synthetic-ecg,10,4.24164,4.30595,4.33702
+eeg,10,2.2058,2.10786,2.3101
+sine,10,10.5893,10.6746,11.1089
