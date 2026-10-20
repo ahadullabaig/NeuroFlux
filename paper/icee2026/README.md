@@ -1,5 +1,17 @@
 # ICEE 2026 paper
 
+> **© 2026 IEEE.** Personal use of this material is permitted. Permission from IEEE must
+> be obtained for all other uses, in any current or future media, including
+> reprinting/republishing this material for advertising or promotional purposes, creating
+> new collective works, for resale or redistribution to servers or lists, or reuse of any
+> copyrighted component of this work in other works.
+>
+> This is the accepted version of: A. U. Baig, D. Gera and C. G, "Feed-Forward Spiking
+> Networks Obey a Friis-Type Cascade Law: Fidelity Ceilings and a Fan-in Design Rule for
+> Biosignal Processing," *2026 8th IEEE International Conference on Emerging Electronics
+> (ICEE)*, Bengaluru, India, 2026. The full citation, DOI and IEEE Xplore link will be
+> added here on publication.
+
 IEEE ICEE 2026 (8th International Conference on Emerging Electronics, Bengaluru), track
 *Memory Technologies & Neuromorphic Computing*. Limit: 4 pages including references.
 
