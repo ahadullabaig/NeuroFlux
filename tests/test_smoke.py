@@ -9,7 +9,3 @@ def test_neuroflux_core_importable() -> None:
 
 def test_neuroflux_datasets_importable() -> None:
     importlib.import_module("neuroflux_datasets")
-
-
-def test_neuroflux_baselines_importable() -> None:
-    importlib.import_module("neuroflux_baselines")

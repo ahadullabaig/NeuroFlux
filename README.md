@@ -209,7 +209,6 @@ Earlier versions of this README reported that the untrained network preserved R-
 packages/
   core/          neuroflux-core: neurons, synapses, encoders, decoders, network, metrics, io
   datasets/      neuroflux-datasets: synthetic signals, MIT-BIH pipeline, experiment CLI
-  baselines/     neuroflux-baselines: classical baselines (stub)
 scripts/         one directory per research stage (r3_characterisation/, r4b_mechanism/, ...)
 results/         committed results: raw grids (*.csv.gz), analyses, figures
 docs/            findings for each stage, related work, roadmap
