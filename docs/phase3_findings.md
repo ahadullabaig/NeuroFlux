@@ -216,7 +216,7 @@ A near-binary detector output:
 - Has high variance against the smooth ground-truth ECG (ΔSNR penalty).
 - Has accurate peak timing because the firing event is aligned with QRS (rpeak benefit).
 
-This is a real machine-learning specialization story, not a bug. The DETAILS.md proposal described the method as a denoising filter; the actual converged behavior is closer to a learned spike-encoder of the cardiac landmark.
+This is a real machine-learning specialization story, not a bug. The docs/archive/DETAILS.md proposal described the method as a denoising filter; the actual converged behavior is closer to a learned spike-encoder of the cardiac landmark.
 
 ### 4.3 Why the input channels do not help
 
@@ -228,7 +228,7 @@ This is an inherited Phase 2 architectural choice (Phase 2 also tiles synthetic 
 
 Pair-based STDP with hard weight clamps has no implicit regularizer. With a single-channel periodic input, the network sees the same temporal correlations repeatedly. The weight matrix drifts along the gradient of "strengthen what is recurring" indefinitely. There is no fixed point because there is no opposing force (no decay term, no normalization, no homeostatic mechanism). Weights eventually saturate at w_min or w_max; before saturation, they drift.
 
-This is mechanistically reasonable. Phase 6 (hyperparameter optimization) could investigate whether adding homeostatic plasticity (per DETAILS.md §9 — "homeostatic plasticity" listed as an extensibility item) would create a fixed point. That would also potentially raise the output SNR floor.
+This is mechanistically reasonable. Phase 6 (hyperparameter optimization) could investigate whether adding homeostatic plasticity (per docs/archive/DETAILS.md §9 — "homeostatic plasticity" listed as an extensibility item) would create a fixed point. That would also potentially raise the output SNR floor.
 
 ---
 
@@ -530,5 +530,5 @@ What this study **does not** address:
 - Per-axis figures: `results/phase3_full_figures/{snr_heatmap_ecg,convergence_ecg,sensitivity_ecg}.png`
 - Diagnostic results: `results/phase3_diagnostics/` (populated as diagnostics run)
 - Phase 3 regression test: `tests/datasets/test_phase3_regression.py`
-- Original proposal: `DETAILS.md` (especially §6.2 for the original synthetic claim)
-- Roadmap: `PLAN.md` (Phases 4-8 sections updated to reflect this finding)
+- Original proposal: `docs/archive/DETAILS.md` (especially §6.2 for the original synthetic claim)
+- Roadmap: `docs/archive/PLAN.md` (Phases 4-8 sections updated to reflect this finding)

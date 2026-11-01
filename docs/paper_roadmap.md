@@ -1,9 +1,9 @@
 # NeuroFlux paper roadmap — the output-ceiling result
 
-**Status:** Active. Supersedes `PLAN.md` Phases 4, 6 and 7 for the purpose of producing a publishable manuscript.
+**Status:** Active. Supersedes `docs/archive/PLAN.md` Phases 4, 6 and 7 for the purpose of producing a publishable manuscript.
 **Framing:** D — *rate-coded SNN reconstruction imposes an input-independent output quality ceiling.*
 **Target:** submission-ready manuscript in 8 weeks of steady part-time work.
-**Companion documents:** `docs/phase3_findings.md` (what we measured on ECG), `PLAN.md` (original roadmap), `DETAILS.md` (technical spec).
+**Companion documents:** `docs/phase3_findings.md` (what we measured on ECG), `docs/archive/PLAN.md` (original roadmap), `docs/archive/DETAILS.md` (technical spec).
 
 ---
 

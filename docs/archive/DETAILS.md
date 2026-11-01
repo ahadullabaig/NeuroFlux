@@ -1,5 +1,8 @@
 # NeuroFlux: A Software-Based Neuromorphic Framework for Adaptive Pattern Recognition and Flicker Suppression in Temporal Data
 
+> [!WARNING]
+> **Archived: original proposal.** This is the April 2026 proposal, written when NeuroFlux was pitched as an adaptive flicker-suppression filter. Its central claim did not survive measurement: on real ECG the network reconstructs at a fixed quality and is not a denoiser ([`docs/phase3_findings.md`](../phase3_findings.md), [`docs/paper_roadmap.md`](../paper_roadmap.md)). The [README](../../README.md) describes the current state. The proposal is kept for the record.
+
 **Proposal Document v1.0**
 **Date: April 2026**
 

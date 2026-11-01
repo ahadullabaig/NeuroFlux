@@ -58,7 +58,7 @@ class TestConfigValidation:
         assert total_runs == 5760
 
     def test_full_sweep_config_values(self) -> None:
-        """full_sweep.yaml matches PLAN.md specifications."""
+        """full_sweep.yaml matches docs/archive/PLAN.md specifications."""
         config_path = PROJECT_ROOT / "configs" / "phase2" / "full_sweep.yaml"
         with open(config_path) as f:
             raw = yaml.safe_load(f)

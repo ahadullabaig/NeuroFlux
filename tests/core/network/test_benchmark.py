@@ -8,11 +8,11 @@ from neuroflux_core import Network, Simulator
 
 @pytest.mark.skipif(
     os.environ.get("NUMBA_DISABLE_JIT") == "1",
-    reason="PLAN.md performance target requires JIT-compiled kernels.",
+    reason="docs/archive/PLAN.md performance target requires JIT-compiled kernels.",
 )
 def test_640_synapse_performance_benchmark() -> None:
     """
-    PLAN.md acceptance criterion: 640-synapse network, 10,000 timesteps,
+    docs/archive/PLAN.md acceptance criterion: 640-synapse network, 10,000 timesteps,
     under 2 seconds on M-series or i7-class CPU (with Numba JIT).
     """
     net = Network.feedforward(layers=[32, 20], seed=42, init_scheme="uniform")
@@ -33,7 +33,7 @@ def test_640_synapse_performance_benchmark() -> None:
 
     assert duration < 2.0, (
         f"Performance regression: {duration:.2f}s for 10k steps × 640 synapses "
-        f"(target < 2s per PLAN.md)."
+        f"(target < 2s per docs/archive/PLAN.md)."
     )
 
 

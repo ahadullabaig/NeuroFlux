@@ -191,7 +191,7 @@ The paper is the end of a sequence of stages. Each one is written up with its pr
 | [R5](docs/r5_findings.md) | Generality across encoders, readouts and QRS detectors. Delay-compensated ceilings. |
 | [H1](docs/h1_findings.md) | *Ongoing:* what fidelity costs in hardware (fan-in, weight precision, device variation). |
 
-Supporting documents: [related work](docs/related_work.md), [paper roadmap](docs/paper_roadmap.md), the original [technical specification](DETAILS.md) and [project plan](PLAN.md).
+Supporting documents: [related work](docs/related_work.md), [paper roadmap](docs/paper_roadmap.md), and, archived, the original [proposal](docs/archive/DETAILS.md) and [project plan](docs/archive/PLAN.md).
 
 <details>
 <summary><b>How the project got here</b></summary>

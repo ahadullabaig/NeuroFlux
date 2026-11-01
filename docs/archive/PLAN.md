@@ -1,5 +1,8 @@
 # NeuroFlux: Implementation Plan
 
+> [!WARNING]
+> **Archived: superseded plan.** This is the original 16-week implementation plan from May 2026, written when NeuroFlux was pitched as an adaptive flicker-suppression filter. Measurement overturned that framing: conventional filters beat the network on every noise type tested, and the project became the fidelity-ceiling result published at IEEE ICEE 2026. [`docs/paper_roadmap.md`](../paper_roadmap.md) superseded Phases 4, 6 and 7, and the [README](../../README.md) describes the current state. The plan is kept for the record, because tests and docstrings still cite its acceptance criteria.
+
 **Project:** Software-based neuromorphic framework for adaptive pattern recognition and flicker suppression
 **Plan version:** 1.0
 **Target delivery:** 16 weeks (full scope), with staged value delivery every 2–3 weeks

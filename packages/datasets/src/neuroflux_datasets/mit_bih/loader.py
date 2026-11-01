@@ -3,9 +3,9 @@
 Provides a deterministic, **record-wise** (subject-wise) split that
 guarantees no information leakage across the train/test boundary.
 
-Per ``PLAN.md`` line 277: *"never by time-window within subject — this
-leaks information."*  Every time window from a given record lands
-entirely in either the train set or the test set.
+Per ``docs/archive/PLAN.md`` (Phase 3 preprocessing): *"never by
+time-window within subject — this leaks information."*  Every time window
+from a given record lands entirely in either the train set or the test set.
 """
 
 from __future__ import annotations

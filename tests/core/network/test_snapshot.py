@@ -1,8 +1,8 @@
 """Snapshot regression tests — pin exact bit-level outputs for canonical configs.
 
-Per PLAN.md §"Test strategy": "Outputs of canonical configs are snapshot-tested.
-Any change must be deliberate and documented." If these change, update the
-expected values *only* after confirming the change is intentional.
+Per docs/archive/PLAN.md §"Test strategy": "Outputs of canonical configs are
+snapshot-tested. Any change must be deliberate and documented." If these change,
+update the expected values *only* after confirming the change is intentional.
 """
 
 import hashlib

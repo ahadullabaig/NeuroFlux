@@ -1,6 +1,6 @@
 """CI regression test — canonical ECG config must achieve ΔSNR ≥ 4 dB.
 
-PLAN.md requirement: the canonical config must achieve ΔSNR ≥ 4 dB on the
+docs/archive/PLAN.md requirement: the canonical config must achieve ΔSNR ≥ 4 dB on the
 reference synthetic ECG and run in CI on every commit (fast, not @pytest.mark.slow).
 
 Canonical parameters (best config from full_sweep results):
