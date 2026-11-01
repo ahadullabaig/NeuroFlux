@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: >-
+  If you use NeuroFlux or its results, please cite the ICEE 2026 paper below.
+title: "NeuroFlux: fidelity ceilings and a cascade law for spiking biosignal processing"
+type: software
+authors:
+  - given-names: Ahad Ulla
+    family-names: Baig
+    affiliation: Ramaiah Institute of Technology
+  - given-names: Divisha
+    family-names: Gera
+    affiliation: Ramaiah Institute of Technology
+  - given-names: Charithra
+    family-names: G
+    affiliation: Ramaiah Institute of Technology
+repository-code: "https://github.com/ahadullabaig/NeuroFlux"
+license: MIT
+version: icee2026
+date-released: 2026-11-01
+keywords:
+  - spiking neural networks
+  - neuromorphic computing
+  - signal reconstruction
+  - ECG
+  - noise cascade
+  - sparse connectivity
+preferred-citation:
+  type: conference-paper
+  title: >-
+    Feed-Forward Spiking Networks Obey a Friis-Type Cascade Law: Fidelity
+    Ceilings and a Fan-in Design Rule for Biosignal Processing
+  authors:
+    - given-names: Ahad Ulla
+      family-names: Baig
+      affiliation: Ramaiah Institute of Technology
+    - given-names: Divisha
+      family-names: Gera
+      affiliation: Ramaiah Institute of Technology
+    - given-names: Charithra
+      family-names: G
+      affiliation: Ramaiah Institute of Technology
+  collection-title: >-
+    2026 8th IEEE International Conference on Emerging Electronics (ICEE)
+  conference:
+    name: 8th IEEE International Conference on Emerging Electronics (ICEE 2026)
+    city: Bengaluru
+    country: IN
+  publisher:
+    name: IEEE
+  year: 2026
