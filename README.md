@@ -191,7 +191,7 @@ The paper is the end of a sequence of stages. Each one is written up with its pr
 | [R5](docs/r5_findings.md) | Generality across encoders, readouts and QRS detectors. Delay-compensated ceilings. |
 | [H1](docs/h1_findings.md) | *Ongoing:* what fidelity costs in hardware (fan-in, weight precision, device variation). |
 
-Supporting documents: [related work](docs/related_work.md), [paper roadmap](docs/paper_roadmap.md), and, archived, the original [proposal](docs/archive/DETAILS.md) and [project plan](docs/archive/PLAN.md).
+The [docs index](docs/README.md) explains the stage names, and the [results index](results/README.md) explains the file formats. Supporting documents: [related work](docs/related_work.md), [paper roadmap](docs/paper_roadmap.md), and, archived, the original [proposal](docs/archive/DETAILS.md) and [project plan](docs/archive/PLAN.md).
 
 <details>
 <summary><b>How the project got here</b></summary>
@@ -210,8 +210,8 @@ packages/
   core/          neuroflux-core: neurons, synapses, encoders, decoders, network, metrics, io
   datasets/      neuroflux-datasets: synthetic signals, MIT-BIH pipeline, experiment CLI
 scripts/         one directory per research stage (r3_characterisation/, r4b_mechanism/, ...)
-results/         committed results: raw grids (*.csv.gz), analyses, figures
-docs/            findings for each stage, related work, roadmap
+results/         committed results per stage: raw grids (*.csv.gz), analyses, figures
+docs/            findings for each stage, related work, roadmap, archive/
 paper/icee2026/  the ICEE 2026 manuscript, figures and number-to-source map
 configs/         YAML sweep configurations
 tests/           unit, property-based, snapshot and regression tests

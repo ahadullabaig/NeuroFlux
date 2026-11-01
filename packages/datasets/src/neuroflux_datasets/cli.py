@@ -126,7 +126,7 @@ class ResultsDB:
         ``ALTER TABLE ... ADD COLUMN`` for any in ``_ADDED_COLUMNS`` that are
         missing. New databases are created with the original eight columns and
         brought up to date by this same path, so an old 8-column
-        ``results/full_sweep.db`` from Phase 2 and a fresh database end up with
+        ``results/phase2/full_sweep.db`` from Phase 2 and a fresh database end up with
         an identical schema.
         """
         cursor = self.conn.execute("PRAGMA table_info(runs)")

@@ -69,13 +69,16 @@ neuroflux/
 ├── configs/phase3/                 # mit_bih_sweep.yaml, quick_validation.yaml,
 │                                   # diagnostic_untrained.yaml,
 │                                   # diagnostic_network_sweep_{8,16,32,64}.yaml
-├── scripts/phase3_diagnostics/     # populate_manifest.py, output_snr_floor.py
-├── results/                        # full_sweep.db, significance_results.csv,
-│                                   # phase3_full_sweep.db, phase3_full_sig/,
-│                                   # phase3_full_figures/, phase3_diagnostics/
+├── scripts/<stage>/                # one dir per research stage (phase3_diagnostics,
+│                                   # r1_metrics … r5_generality, m1a … m4, h1,
+│                                   # paper_icee2026, paper_mcsoc2027)
+├── results/<stage>/                # same stage names; results/README.md indexes them;
+│                                   # phase2/ holds full_sweep.db + significance CSVs
+├── docs/                           # <stage>_findings.md, docs/README.md index,
+│                                   # archive/ (original PLAN.md, DETAILS.md)
+├── paper/                          # icee2026/ (accepted, © IEEE), mcsoc2027/ (draft)
 ├── tests/                          # integration + property + snapshot tests
 ├── experiments/                    # phase2_analysis.ipynb, phase3_analysis.ipynb
-├── docs/                           # phase3_findings.md (Phase 7 fills the rest)
 └── pyproject.toml                  # uv workspace root; dev deps
 ```
 
@@ -225,7 +228,7 @@ Real biomedical dataset integration — MIT-BIH Arrhythmia Database (ECG). Modul
 
 **`network_layers` field** — shared by both Phase2Config and Phase3Config. Default `[32, 16, 8]` preserves all pre-Phase-3 behavior (Phase 2 regression test verified byte-identically). `run_single_experiment` uses `params["network_layers"][0]` to tile the single-channel input across the input layer, so changing this field correctly resizes the input tile. Phase 3 §5.6.3 found `[32, 32, 32]` outperforms the default on real ECG; this is the recommended starting point for Phase 6 hyperparameter optimization. Wide configurations (input layer ≥ 64) collapse rpeak in §5.6.3 — an `rpeak_integrity` result, so treat it as unverified until re-measured on QRS F1.
 
-**`ResultsDB` schema migration.** `RunResult` gained `dataset`/`record_id`/`rpeak_integrity` (all with defaults). `ResultsDB._migrate()` runs `PRAGMA table_info(runs)` + `ALTER TABLE ... ADD COLUMN` on open, upgrading an existing pre-Phase-3 8-column `results/full_sweep.db` in place — old rows stay readable, the migration is idempotent. `rpeak_integrity` and the QRS columns are computed **only** on the `mit-bih` branch; synthetic runs leave them `None`. The QRS scoring reads reference beats with `_resolve_reference_beats`, which re-reads the record's `.atr` file — **tests of the mit-bih branch must patch `extract_annotated_segments` as well as `make_pair`**, or they pass on a machine with cached records and fail in CI without them (see the `patched_make_pair` fixture in `test_cli_phase3.py`).
+**`ResultsDB` schema migration.** `RunResult` gained `dataset`/`record_id`/`rpeak_integrity` (all with defaults). `ResultsDB._migrate()` runs `PRAGMA table_info(runs)` + `ALTER TABLE ... ADD COLUMN` on open, upgrading an existing pre-Phase-3 8-column `results/phase2/full_sweep.db` in place — old rows stay readable, the migration is idempotent. `rpeak_integrity` and the QRS columns are computed **only** on the `mit-bih` branch; synthetic runs leave them `None`. The QRS scoring reads reference beats with `_resolve_reference_beats`, which re-reads the record's `.atr` file — **tests of the mit-bih branch must patch `extract_annotated_segments` as well as `make_pair`**, or they pass on a machine with cached records and fail in CI without them (see the `patched_make_pair` fixture in `test_cli_phase3.py`).
 
 ### Phase 3 known limitations / notes for later phases
 
